@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CJ Gerenciamento</string>
+    <string name="title_activity_main">CJ Gerenciamento</string>
+    <string name="package_name">ao.cjgerenciamento.app</string>
+    <string name="custom_url_scheme">ao.cjgerenciamento.app</string>
+</resources>
