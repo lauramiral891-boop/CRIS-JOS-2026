@@ -1,0 +1,8 @@
+{
+  "appId": "ao.cjgerenciamento.app",
+  "appName": "CJ Gerenciamento",
+  "webDir": "dist",
+  "backgroundColor": "#000000",
+  "android": { "allowMixedContent": false },
+  "ios": { "contentInset": "always" }
+}
