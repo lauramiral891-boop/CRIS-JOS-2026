@@ -8,7 +8,7 @@ import { clearFails, lockLeft, recordFail } from "./accounts";
    A senha em si nunca está no código. Para trocar: gere um novo hash com
    o mesmo método (v1$<sal>$<hash>) e substitua a constante abaixo.
    ===================================================================== */
-const ADM_HASH = "v1$PJKVXPDP7C$1adb67bb5c173110d19cb0cd6e101866b6bae22f73c9ffc1c2d9f138341a913e";
+const ADM_HASH = "v1$VYBVJSY9GF$a88f0a5bbf91b5e1f5dea8f587285daa6d11d1cf38bb56958594579337f9b942";
 const LOCK_KEY = "adm:global";
 
 export type AdmLogin = { ok: true } | { ok: false; error: string };
