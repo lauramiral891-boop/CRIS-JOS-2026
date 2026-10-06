@@ -2,7 +2,7 @@
    dados de cada casa e conteúdo global do ADM. Se as variáveis não estiverem
    definidas, a app continua a funcionar só neste telemóvel (modo local). */
 
-const env = ((import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {});
+const env = import.meta.env;
 /* aceita os nomes VITE_… e também os do painel do Supabase (NEXT_PUBLIC_…) */
 const URL_ = (env.VITE_SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
 const KEY = (env.VITE_SUPABASE_ANON_KEY ?? env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
