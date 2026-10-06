@@ -99,3 +99,45 @@ export async function syncAlarms(list: DueAlarm[]) {
     scheduled = new Set(future.map((a) => nid(a.id)));
   } catch { /* ignora */ }
 }
+/* ---- Notificação persistente da máquina com tempo restante ---- */
+
+export interface MachineCountdown {
+  id: number;
+  station: string;
+  player: string;
+  remainingSec: number;
+}
+
+export async function updateMachineCountdown(list: MachineCountdown[]) {
+  if (!isNative() || nativePerm !== "granted") return;
+
+  try {
+    const L = await ln();
+
+    for (const machine of list) {
+      const remaining = Math.max(0, Math.ceil(machine.remainingSec));
+      const min = Math.floor(remaining / 60);
+      const sec = remaining % 60;
+      const clock = `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+
+      await L.cancel({
+        notifications: [{ id: nid(900000 + machine.id) }],
+      });
+
+      if (remaining > 0) {
+        await L.schedule({
+          notifications: [{
+            id: nid(900000 + machine.id),
+            title: `🎮 ${machine.station}`,
+            body: `${clock} restantes • ${machine.player}`,
+            channelId: CH_ALERT,
+            ongoing: true,
+            autoCancel: false,
+          }],
+        });
+      }
+    }
+  } catch {
+    /* ignora falhas nativas */
+  }
+}

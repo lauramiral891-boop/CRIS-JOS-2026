@@ -48,7 +48,7 @@ import { inviteFree } from "./lib/cloud";
 import { channelFor, wipeShadow, type Snap } from "./lib/sync";
 import { useLiveSync } from "./lib/useLiveSync";
 import { merge3, mergeData } from "./lib/merge";
-import { askNotifPermission, notifPermission, syncAlarms, systemNotify } from "./lib/push";
+import { askNotifPermission, notifPermission, syncAlarms, systemNotify, updateMachineCountdown } from "./lib/push";
 import { cn } from "./utils/cn";
 
 type Tab = "home" | "bookings" | "players" | "finances" | "settings";
@@ -371,6 +371,21 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alarmSig, config.notifOn, notifGranted]);
+
+  /* Notificação persistente: usa o mesmo relógio das máquinas */
+  useEffect(() => {
+    if (!config.notifOn || notifPermission() !== "granted") return;
+    const active = dataRef.current.sessions
+      .filter((s) => s.kind === "timed" && !s.alarmFired)
+      .map((s) => ({
+        id: s.id,
+        station: stationName(s.stationId),
+        player: s.player,
+        remainingSec: s.durationSec - (now - s.startedAt) / 1000,
+      }))
+      .filter((s) => s.remainingSec > 0);
+    void updateMachineCountdown(active);
+  }, [now, config.notifOn, notifGranted]);
 
   useEffect(() => {
     const h = () => unlockAudio();

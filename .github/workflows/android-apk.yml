@@ -24,6 +24,11 @@ jobs:
         run: npm ci
 
       - name: Build Web
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_ADM_EMAIL: ${{ secrets.VITE_ADM_EMAIL }}
+          VITE_LICENSE_SECRET: ${{ secrets.VITE_LICENSE_SECRET }}
         run: npm run build
 
       - name: Sincronizar Capacitor
