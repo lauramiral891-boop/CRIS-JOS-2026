@@ -40,6 +40,8 @@ jobs:
           distribution: temurin
           java-version: 21
 
+      - name: Verificar Java
+        run: java -version
       - name: Dar permissão ao Gradle
         run: chmod +x android/gradlew
 
