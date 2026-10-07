@@ -228,6 +228,10 @@ export async function globalPush(data: unknown): Promise<Res<string>> {
       method: "POST", token: t, headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify({ id: 1, data, updated_at: at }),
     });
-    return r.ok ? { ok: true, data: at } : { ok: false, error: await errText(r, "Não foi possível publicar.") };
+    if (!r.ok) {
+      const body = await r.text();
+      return { ok: false, error: `PUBLISH HTTP ${r.status}: ${body.slice(0, 500)}` };
+    }
+    return { ok: true, data: at };
   } catch { return { ok: false, error: offline }; }
 }
