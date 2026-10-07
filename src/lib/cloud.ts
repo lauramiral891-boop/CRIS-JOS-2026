@@ -59,7 +59,7 @@ export async function sendCode(email: string): Promise<Res> {
 export async function verifyCode(email: string, code: string): Promise<Res<{ uid: string }>> {
   try {
     const r = await raw("/auth/v1/verify", { method: "POST", body: JSON.stringify({ type: "email", email: email.toLowerCase(), token: code.replace(/\D/g, "") }) });
-    if (!r.ok) return { ok: false, error: await errText(r, "Código incorreto ou expirado.") };
+    if (!r.ok) { const body = await r.text(); return { ok: false, error: `DEBUG HTTP ${r.status}: ${body.slice(0,500)}` }; }
     const j = await r.json() as { access_token: string; refresh_token: string; expires_in?: number; user?: { id: string } };
     const s: Stored = { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in ?? 3600) * 1000, uid: j.user?.id ?? "" };
     writeS(email, s);
