@@ -41,7 +41,7 @@ export default function AccountGate({ onOwnerEnter, onStaffEnter, onAdm }: Props
   const [pendLogin, setPendLogin] = useState("");
   const [pendShow, setPendShow] = useState("");
   const [shownCode, setShownCode] = useState("");
-  const [cardOpen, setCardOpen] = useState(true);
+  const [cardOpen, setCardOpen] = useState(false);
   const [code, setCode] = useState("");
   const [cool, setCool] = useState(0);
 
