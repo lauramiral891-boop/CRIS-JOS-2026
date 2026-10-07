@@ -331,6 +331,7 @@ const setStamp = (k: string, v: string) => { try { localStorage.setItem(k, v); }
 const GKEY = "cjg-gstamp";
 const DIRTY = "cjg-adm-dirty";
 export const admDirty = () => getStamp(DIRTY) === "1";
+export let lastPublishError = "";
 const setDirty = (v: boolean) => { try { v ? localStorage.setItem(DIRTY, "1") : localStorage.removeItem(DIRTY); } catch { /* ignora */ } };
 
 /** Todos os telemóveis: traz anúncios, salas, avisos, gerentes e memórias publicados pelo ADM. */
@@ -352,10 +353,13 @@ export async function syncGlobalDown() {
 
 /** ADM: publica o conteúdo para todos. Se falhar (sem net/sem sessão), fica marcado para não ser apagado. */
 export async function pushGlobalUp(g: GlobalAdm): Promise<boolean> {
+  lastPublishError = "";
   if (!cloudOn()) return true;
   if (!hasSession(ADM_EMAIL)) { setDirty(true); return false; }
   const r = await globalPush(g);
-  if (r.ok) { setStamp(GKEY, r.data); setDirty(false); return true; }
+  if (r.ok) { lastPublishError = ""; setStamp(GKEY, r.data); setDirty(false); return true; }
+  lastPublishError = r.error;
+  console.error("[CJ] Falha ao publicar:", r.error);
   setDirty(true);
   return false;
 }
