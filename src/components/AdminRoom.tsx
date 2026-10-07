@@ -13,7 +13,7 @@ import { billInfo, confirmPayment, makeCode, newPayment, rejectPayment, DAY } fr
 import { admLogin, loadGlobalAdm, loadUnknown, saveGlobalAdm, saveUnknown } from "../lib/adm";
 import { BASE } from "../lib/brain";
 import { ADM_EMAIL, cloudOn, hasSession, sendCode, verifyCode, signOutCloud } from "../lib/cloud";
-import { admDirty, pushGlobalUp } from "../lib/sync";
+import { admDirty, lastPublishError, pushGlobalUp } from "../lib/sync";
 import { waLink } from "./BillingUI";
 import { loadAccounts } from "../lib/accounts";
 import { fileToImage } from "../lib/image";
@@ -707,14 +707,14 @@ function CloudBar({ g, onPublished }: { g: GlobalAdm; onPublished: () => void })
     const v = await verifyCode(ADM_EMAIL, code);
     if (!v.ok) { setBusy(false); return setMsg(v.error); }
     const ok = await pushGlobalUp(g); setBusy(false);
-    setOn(true); setStage(0); setCode(""); setDirty(!ok); setMsg(ok ? "Ligado! Tudo o que fizer aqui chega a todos os telemóveis." : "Ligado, mas não foi possível publicar agora. Confirme o email do ADM no esquema SQL."); onPublished();
+    setOn(true); setStage(0); setCode(""); setDirty(!ok); setMsg(ok ? "Ligado! Tudo o que fizer aqui chega a todos os telemóveis." : (lastPublishError || "Não foi possível publicar agora.")); onPublished();
   };
   return (
     <div className={cn("mx-3 mt-2 rounded-xl border px-3 py-2 text-[11.5px]", on && !dirty ? "border-[#00FF88]/35 bg-[#00FF88]/[0.07]" : "border-[#FFC107]/40 bg-[#FFC107]/10")}>
       {on ? (
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 font-semibold text-[#00FF88]">{dirty ? "Nuvem ligada, mas há alterações por publicar." : "Nuvem ligada — publica para todos."}</span>
-          {dirty && <button onClick={async () => { const ok = await pushGlobalUp(loadGlobalAdm()); setDirty(!ok); }} className="rounded-lg bg-[#FFC107] px-2 py-1 font-extrabold uppercase text-black">Publicar</button>}
+          {dirty && <button onClick={async () => { const ok = await pushGlobalUp(loadGlobalAdm()); setDirty(!ok); setMsg(ok ? "Publicado com sucesso na nuvem." : (lastPublishError || "Não foi possível publicar agora.")); }} className="rounded-lg bg-[#FFC107] px-2 py-1 font-extrabold uppercase text-black">Publicar</button>}
           <button onClick={() => { signOutCloud(ADM_EMAIL); setOn(false); }} className="text-neutral-400 underline">Sair</button>
         </div>
       ) : stage === 0 ? (
