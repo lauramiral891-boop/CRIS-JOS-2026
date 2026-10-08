@@ -37,7 +37,7 @@ export async function askNotifPermission(): Promise<Perm> {
   if (isNative()) {
     try {
       const L = await ln();
-      const a = await L.checkPermissions(); const b = await L.requestPermissions(); nativePerm = mapPerm(b.display); alert("Antes=" + a.display + " Depois=" + b.display);
+      const T = <X>(p: Promise<X>) => new Promise<X>((ok, no) => { setTimeout(() => no(new Error("sem resposta em 5s")), 5000); p.then(ok, no); }); const a = await T(L.checkPermissions()); alert("Antes=" + a.display); const b = await T(L.requestPermissions()); nativePerm = mapPerm(b.display); alert("Depois=" + b.display);
     } catch (e) { alert("Erro notif: " + (e instanceof Error ? e.message : String(e))); }
     return nativePerm;
   }
