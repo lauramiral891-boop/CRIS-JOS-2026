@@ -25,7 +25,7 @@ export async function initNotifications() {
       await L.createChannel({ id: CH_ALERT, name: "Alertas (tempo esgotado)", description: "Fim de sessões e avisos urgentes", importance: 5, visibility: 1, vibration: true, lights: true });
       await L.createChannel({ id: CH_GENERAL, name: "Avisos da Game House", description: "Vendas, reservas, relatórios e avisos da CJ", importance: 4, visibility: 1, vibration: true });
     }
-  } catch { /* plugin indisponível */ }
+  } catch (e) { alert("Init erro: " + (e instanceof Error ? e.message : String(e))); }
 }
 
 export const notifSupported = () => isNative() || (typeof window !== "undefined" && "Notification" in window);
@@ -37,7 +37,7 @@ export async function askNotifPermission(): Promise<Perm> {
   if (isNative()) {
     try {
       const L = await ln();
-      nativePerm = mapPerm((await L.requestPermissions()).display);
+      const a = await L.checkPermissions(); const b = await L.requestPermissions(); nativePerm = mapPerm(b.display); alert("Antes=" + a.display + " Depois=" + b.display);
     } catch (e) { alert("Erro notif: " + (e instanceof Error ? e.message : String(e))); }
     return nativePerm;
   }
