@@ -2,3 +2,5 @@ node_modules/
 dist/
 _backup_icons/
 *.log
+.vercel
+.env*

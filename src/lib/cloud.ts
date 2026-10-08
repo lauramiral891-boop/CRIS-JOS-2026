@@ -14,6 +14,17 @@ export type Res<T = void> = { ok: true; data: T } | { ok: false; error: string }
 
 interface Stored { access: string; refresh: string; exp: number; uid: string }
 const sk = (email: string) => `cjg-cloud-auth:${email.toLowerCase()}`;
+const LAST_EMAIL_KEY = "cjg-cloud-last-email";
+
+export const lastCloudEmail = (): string => {
+  try { return (localStorage.getItem(LAST_EMAIL_KEY) ?? "").trim().toLowerCase(); }
+  catch { return ""; }
+};
+
+export const rememberCloudEmail = (email: string) => {
+  try { localStorage.setItem(LAST_EMAIL_KEY, email.trim().toLowerCase()); }
+  catch { /* ignora */ }
+};
 const readS = (email: string): Stored | null => { try { return JSON.parse(localStorage.getItem(sk(email)) ?? "null") as Stored | null; } catch { return null; } };
 const writeS = (email: string, s: Stored | null) => { try { s ? localStorage.setItem(sk(email), JSON.stringify(s)) : localStorage.removeItem(sk(email)); } catch { /* ignora */ } };
 
@@ -59,10 +70,11 @@ export async function sendCode(email: string): Promise<Res> {
 export async function verifyCode(email: string, code: string): Promise<Res<{ uid: string }>> {
   try {
     const r = await raw("/auth/v1/verify", { method: "POST", body: JSON.stringify({ type: "email", email: email.toLowerCase(), token: code.replace(/\D/g, "") }) });
-    if (!r.ok) { const body = await r.text(); return { ok: false, error: `DEBUG HTTP ${r.status}: ${body.slice(0,500)}` }; }
+    if (!r.ok) return { ok: false, error: await errText(r, "Código incorreto ou expirado.") };
     const j = await r.json() as { access_token: string; refresh_token: string; expires_in?: number; user?: { id: string } };
     const s: Stored = { access: j.access_token, refresh: j.refresh_token, exp: Date.now() + (j.expires_in ?? 3600) * 1000, uid: j.user?.id ?? "" };
     writeS(email, s);
+    rememberCloudEmail(email);
     return { ok: true, data: { uid: s.uid } };
   } catch { return { ok: false, error: offline }; }
 }
@@ -228,10 +240,7 @@ export async function globalPush(data: unknown): Promise<Res<string>> {
       method: "POST", token: t, headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify({ id: 1, data, updated_at: at }),
     });
-    if (!r.ok) {
-      const body = await r.text();
-      return { ok: false, error: `PUBLISH HTTP ${r.status}: ${body.slice(0, 500)}` };
-    }
+    if (!r.ok) return { ok: false, error: await errText(r, "Não foi possível publicar o conteúdo do ADM.") };
     return { ok: true, data: at };
   } catch { return { ok: false, error: offline }; }
 }
