@@ -33,11 +33,12 @@ export const notifPermission = (): Perm => (isNative() ? nativePerm : typeof win
 
 /** Tem de ser chamado a partir de um toque do utilizador. No Android 13+ abre o pedido «Permitir notificações». */
 export async function askNotifPermission(): Promise<Perm> {
+  alert("Diag: nativo=" + isNative() + " plataforma=" + (cap()?.getPlatform?.() ?? "nenhuma"));
   if (isNative()) {
     try {
       const L = await ln();
       nativePerm = mapPerm((await L.requestPermissions()).display);
-    } catch { /* ignora */ }
+    } catch (e) { alert("Erro notif: " + (e instanceof Error ? e.message : String(e))); }
     return nativePerm;
   }
   if (!notifSupported()) return "unsupported";
