@@ -4,8 +4,8 @@ import AdminRoom from "./components/AdminRoom";
 import Workspace from "./App";
 import { getAccount, loadSession, saveSession, updateAccount, type Account, type Session } from "./lib/accounts";
 import { setNamespace } from "./lib/storage";
-import { cloudOn } from "./lib/cloud";
-import { loadStaffToken, syncGlobalDown } from "./lib/sync";
+import { cloudOn, lastCloudEmail } from "./lib/cloud";
+import { loadStaffToken, syncGlobalDown, restoreAccount } from "./lib/sync";
 
 /** Escolhe a conta ativa. Cada conta vê só o seu próprio espaço de dados. */
 export default function Root() {
@@ -19,6 +19,24 @@ export default function Root() {
   const [fresh, setFresh] = useState(false);
   const [adm, setAdm] = useState(false);
   const [account, setAccount] = useState<Account | null>(() => (session ? getAccount(session.accountId) : null));
+
+  useEffect(() => {
+    if (session) return;
+    const email = lastCloudEmail();
+    if (!email) return;
+    let cancelled = false;
+    void (async () => {
+      const r = await restoreAccount(email);
+      if (cancelled || !r.ok) return;
+      const next: Session = { accountId: r.account.id, role: "owner" };
+      setNamespace(r.account.id);
+      saveSession(next);
+      setAccount(r.account);
+      setFresh(true);
+      setSession(next);
+    })();
+    return () => { cancelled = true; };
+  }, [session]);
 
   /* Conteúdo do ADM (anúncios, salas, avisos, gerentes, memórias): chega a todos os telemóveis */
   useEffect(() => {
