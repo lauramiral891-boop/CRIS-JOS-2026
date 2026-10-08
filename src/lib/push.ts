@@ -9,7 +9,7 @@ export const isNative = () => !!cap()?.isNativePlatform?.();
 type Perm = NotificationPermission | "unsupported";
 let nativePerm: NotificationPermission = "default";
 
-const ln = async () => (await import("@capacitor/local-notifications")).LocalNotifications;
+const ln = async () => { const P = (await import("@capacitor/local-notifications")).LocalNotifications; return new Proxy({} as typeof P, { get: (_t, k) => (k === "then" ? undefined : (...a: unknown[]) => (P as unknown as Record<string, (...x: unknown[]) => unknown>)[k as string](...a)) }); };
 const mapPerm = (d: string): NotificationPermission => (d === "granted" ? "granted" : d === "denied" ? "denied" : "default");
 
 export const CH_ALERT = "cj-alertas";
