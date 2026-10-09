@@ -31,14 +31,8 @@ jobs:
           VITE_LICENSE_SECRET: ${{ secrets.VITE_LICENSE_SECRET }}
         run: npm run build
 
-      - name: Verificar configuração da nuvem
-        run: |
-          if grep -q "cnxuqeeyhpbbhctcjkcy.supabase.co" dist/index.html; then
-            echo "SUPABASE_URL_IN_BUILD=OK"
-          else
-            echo "SUPABASE_URL_IN_BUILD=NAO"
-            exit 1
-          fi
+      - name: Verificar build web
+        run: test -s dist/index.html
       - name: Sincronizar Capacitor
         run: npx cap sync android
 

@@ -37,6 +37,8 @@ export const emptyConfig = (): Config => ({
   pdfFont: "times",
   pdfSize: 11,
   pdfCase: "normal",
+  pdfSignature: "Cristina e José",
+  pdfSupportNote: "Obrigado pela preferência. Em caso de falha, contacte o proprietário.",
   aiKey: "",
 });
 
@@ -63,7 +65,7 @@ export function normalize(p: Partial<AppData> | null | undefined): AppData | nul
   return {
     ...base,
     ...p,
-    config: { ...base.config, ...p.config },
+    config: { ...base.config, ...p.config, aiKey: "" },
     stations: p.stations ?? [],
     sessions: p.sessions ?? [],
     bookings: p.bookings ?? [],
@@ -105,7 +107,8 @@ export function loadData(): AppData | null {
 export function saveData(d: AppData): boolean {
   if (!NS) return false;
   try {
-    localStorage.setItem(nk("cjg-data"), JSON.stringify(d));
+    const safe = d.config.aiKey ? { ...d, config: { ...d.config, aiKey: "" } } : d;
+    localStorage.setItem(nk("cjg-data"), JSON.stringify(safe));
     return true;
   } catch {
     return false;

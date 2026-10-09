@@ -42,25 +42,33 @@ export const suggestions = [
   "Quero falar com um gerente",
 ];
 
-export function buildSystemPrompt(c: AiContext, question = "", adm: AiMemory[] = []) {
-  const mem = memoryPrompt(question, adm);
+export function buildSystemPrompt(c: AiContext, question = "", adm: AiMemory[] = [], includePrivateData = true) {
+  // Em pedidos que usam pesquisa Google, aplicar minimização de dados: não enviar
+  // memória administrativa nem números/identificadores privados da Game House.
+  const mem = includePrivateData ? memoryPrompt(question, adm) : "";
   return [
     PERSONA,
     `Responde SEMPRE em português de Angola. Trata o utilizador pelo primeiro nome. As respostas são LIDAS EM VOZ ALTA: frases curtas e naturais, sem tabelas e sem markdown pesado (máx. 150 palavras). Usa Kwanzas (AOA). Acaba, quando fizer sentido, com uma frase de ânimo curta.`,
     `Ajudas donos de Game Houses, cyber cafés e pequenos negócios em Angola, tanto com a gestão do negócio como com o uso da app ${BRAND.name}.`,
+    `Mantém um tom profissional, humano, calmo e respeitoso. Organiza respostas com passos numerados quando isso ajudar, explica termos técnicos em linguagem simples e evita repetir a pergunta. Usa emojis com moderação. Distingue factos dos conselhos e nunca inventes dados, preços, leis, funcionalidades ou ações que não estejam disponíveis.`,
+    `Nunca peças nem mostres palavras-passe, tokens ou chaves API. Se a pergunta exigir uma ação na app, indica o caminho certo; se não tiveres dados suficientes, pergunta antes de concluir.`,
     BRAND_FACTS,
     `Se a pergunta for sobre a app, explica onde clicar: Início (mapa de máquinas, sessões, ação rápida Vender), Reservas, Jogadores, Finanças (relatórios dia/semana/mês/trimestre/ano e PDF para WhatsApp), Definições (pacotes, horário, meta, tema, notificações, cópia de segurança, funcionários).`,
     `Se a pergunta for sobre legalização, impostos ou leis, dá orientação geral e recomenda confirmar com as entidades oficiais (Guiché Único da Empresa, AGT, administração municipal).`,
     `Se o assunto for cobrança, pagamento da app, reembolso, bloqueio de conta, erro técnico que não resolves ou algo que não sabes, diz que um gerente real da equipa pode ajudar (botão «Falar com um gerente»). Nunca inventes valores nem prazos.`,
     mem,
-    `Dados reais da Game House do utilizador agora (${c.nowText}):`,
-    `- Nome: ${c.houseName} | Proprietário: ${c.ownerName} | Horário: ${c.openTime}-${c.closeTime}`,
-    `- Máquinas: ${c.stations} (ocupadas ${c.occupied}, livres ${c.free}, reservadas ${c.reserved}, em manutenção ${c.maintenance})`,
-    `- Receita hoje: ${formatAOAshort(c.revenueToday)} | Despesas hoje: ${formatAOAshort(c.expenseToday)} | Vendas (produtos/serviços) hoje: ${formatAOAshort(c.salesToday)}`,
-    `- Receita da semana: ${formatAOAshort(c.revenueWeek)} | do mês: ${formatAOAshort(c.revenueMonth)} | Saldo em caixa: ${formatAOAshort(c.balance)}`,
-    `- Meta diária: ${c.goal > 0 ? formatAOAshort(c.goal) : "não definida"} | Jogadores registados: ${c.players}`,
-    `- Próxima reserva: ${c.nextBooking || "nenhuma"} | Stock baixo: ${c.lowStock.length ? c.lowStock.join(", ") : "nenhum"}`,
-    `Usa estes dados quando forem relevantes. Não inventes números que não tens.`,
+    ...(includePrivateData ? [
+      `Dados reais da Game House do utilizador agora (${c.nowText}):`,
+      `- Nome: ${c.houseName} | Proprietário: ${c.ownerName} | Horário: ${c.openTime}-${c.closeTime}`,
+      `- Máquinas: ${c.stations} (ocupadas ${c.occupied}, livres ${c.free}, reservadas ${c.reserved}, em manutenção ${c.maintenance})`,
+      `- Receita hoje: ${formatAOAshort(c.revenueToday)} | Despesas hoje: ${formatAOAshort(c.expenseToday)} | Vendas (produtos/serviços) hoje: ${formatAOAshort(c.salesToday)}`,
+      `- Receita da semana: ${formatAOAshort(c.revenueWeek)} | do mês: ${formatAOAshort(c.revenueMonth)} | Saldo em caixa: ${formatAOAshort(c.balance)}`,
+      `- Meta diária: ${c.goal > 0 ? formatAOAshort(c.goal) : "não definida"} | Jogadores registados: ${c.players}`,
+      `- Próxima reserva: ${c.nextBooking || "nenhuma"} | Stock baixo: ${c.lowStock.length ? c.lowStock.join(", ") : "nenhum"}`,
+      `Usa estes dados quando forem relevantes. Não inventes números que não tens.`,
+    ] : [
+      `O utilizador pediu pesquisa externa. Não recebeste dados privados da conta, receitas, despesas, nomes, funcionários, reservas nem memórias internas. Responde apenas à pergunta de pesquisa e cita fontes quando disponíveis.`,
+    ]),
   ].filter(Boolean).join("\n");
 }
 
@@ -75,12 +83,37 @@ export async function askOnline(
   onDelta: (t: string) => void,
   signal: AbortSignal,
   firstByteMs = 14000,
-  opts?: { maxTokens?: number; temperature?: number }
+  opts?: { maxTokens?: number; temperature?: number; proxyUrl?: string; accessToken?: string | null; useGoogleSearch?: boolean }
 ) {
   const useKey = key.trim().length > 0;
-  const url = useKey ? "https://api.openai.com/v1/chat/completions" : "https://text.pollinations.ai/openai";
+  const needsSearch = opts?.useGoogleSearch ?? /\b(pesquis|pesquisa|procura|pesquise|google|internet|fonte|fontes|not[ií]cia|hoje|agora|atual|recente|pre[cç]o atual|lan[cç]amento|últim[oa]s?)\b/i.test(history[history.length - 1]?.content ?? "");
+  if (opts?.proxyUrl && !opts.accessToken) {
+    throw new Error("Para usar a IA online com segurança, entre numa conta online autenticada e confirme a configuração do serviço Gemini.");
+  }
+  if (opts?.proxyUrl && opts.accessToken) {
+    const response = await fetch(opts.proxyUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${opts.accessToken}`, apikey: (import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim() },
+      signal,
+      body: JSON.stringify({ history: history.slice(-10), system, search: needsSearch, maxOutputTokens: opts.maxTokens ?? 700, temperature: opts.temperature ?? 0.6 }),
+    });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) throw new Error("A sessão segura da IA expirou. Entre novamente na conta online.");
+      if (response.status === 429) throw new Error("A IA recebeu muitos pedidos. Aguarde um pouco e tente novamente.");
+      throw new Error("O serviço seguro da IA está indisponível. Tente novamente mais tarde.");
+    }
+    const payload = await response.json() as { text?: string; sources?: { title?: string; url?: string }[] };
+    const answer = (payload.text ?? "").trim();
+    if (!answer) throw new Error("A IA não devolveu uma resposta.");
+    onDelta(answer + ((payload.sources?.length ?? 0) ? "\n\nFontes consultadas:\n" + payload.sources!.slice(0, 5).map((source) => `- [${(source.title || "Fonte").replace(/[\[\]]/g, "")}](${source.url})`).join("\n") : ""));
+    return;
+  }
+  // Nunca enviamos dados privados da conta a um fornecedor alternativo quando o proxy seguro não está configurado.
+  if (!useKey) throw new Error("O serviço Gemini seguro ainda não está configurado. As respostas locais continuam disponíveis.");
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${encodeURIComponent(key.trim())}`;
+  const geminiSearchUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key.trim())}`;
+  const url = needsSearch ? geminiSearchUrl : geminiUrl;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (useKey) headers.Authorization = `Bearer ${key.trim()}`;
 
   const inner = new AbortController();
   const onAbort = () => inner.abort();
@@ -92,20 +125,61 @@ export async function askOnline(
   };
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers,
-      signal: inner.signal,
-      body: JSON.stringify({
-        model: useKey ? "gpt-4o-mini" : "openai",
-        messages: [{ role: "system", content: system }, ...history.slice(-10)],
-        stream: true,
-        temperature: opts?.temperature ?? 0.6,
-        max_tokens: opts?.maxTokens ?? 700,
-      }),
-    });
+    const body = useKey
+      ? {
+          systemInstruction: { parts: [{ text: system }] },
+          contents: history.slice(-10).map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+          generationConfig: { temperature: opts?.temperature ?? 0.6, maxOutputTokens: opts?.maxTokens ?? 700 },
+          ...(needsSearch ? { tools: [{ google_search: {} }] } : {}),
+        }
+      : {
+          model: "openai",
+          messages: [{ role: "system", content: system }, ...history.slice(-10)],
+          stream: true,
+          temperature: opts?.temperature ?? 0.6,
+          max_tokens: opts?.maxTokens ?? 700,
+        };
+    const res = await fetch(url, { method: "POST", headers, signal: inner.signal, body: JSON.stringify(body) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const ct = res.headers.get("content-type") ?? "";
+
+    if (useKey && needsSearch) {
+      const payload = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] }; groundingMetadata?: { groundingChunks?: { web?: { title?: string; uri?: string } }[] } }[] };
+      const candidate = payload.candidates?.[0];
+      const answer = (candidate?.content?.parts ?? []).map((part) => part.text ?? "").join("").trim();
+      if (!answer) throw new Error("A pesquisa do Gemini não devolveu uma resposta. Verifique a chave, a quota e a ligação.");
+      const sources = (candidate?.groundingMetadata?.groundingChunks ?? []).map((chunk) => chunk.web).filter((web): web is { title?: string; uri?: string } => !!web?.uri).slice(0, 5);
+      const citations = sources.length ? "\n\nFontes consultadas:\n" + sources.map((source) => `- [${(source.title || "Fonte").replace(/[\[\]]/g, "")}](${source.uri})`).join("\n") : "";
+      clear();
+      onDelta(answer + citations);
+      return;
+    }
+
+    if (useKey) {
+      if (!res.body) throw new Error("A IA não devolveu conteúdo em streaming.");
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let got = false;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const raw of lines) {
+          const line = raw.trim();
+          if (!line.startsWith("data:")) continue;
+          try {
+            const j = JSON.parse(line.slice(5).trim());
+            const d = (j?.candidates?.[0]?.content?.parts ?? []).map((part: { text?: string }) => part.text ?? "").join("");
+            if (d) { if (!got) clear(); got = true; onDelta(d); }
+          } catch { /* fragmento SSE incompleto */ }
+        }
+      }
+      if (!got) throw new Error("Gemini não devolveu uma resposta. Verifique a chave e a quota.");
+      return;
+    }
 
     if (ct.includes("application/json") || !res.body) {
       const j = await res.json();

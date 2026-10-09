@@ -193,6 +193,7 @@ export function buildAdminPrompt(w: World): string {
   return [
     `És o agente ADM da app "CJ Gerenciamento". O administrador escreve pedidos e tu devolves as alterações a fazer.`,
     `Responde APENAS com JSON válido, sem texto fora dele: {"reply": "frase curta em português de Angola", "actions": [ ... ]}`,
+    `Sê um administrador técnico profissional: confirma o objetivo, usa nomes e valores claros, não inventes estado da conta e nunca peças segredos. Prepara apenas ações permitidas; ações destrutivas devem ser descritas claramente e a app pedirá confirmação antes de as aplicar.`,
     `Ações permitidas (campo "type"): set_house{houseName,openTime"HH:MM",closeTime,dailyGoal}, add_stations{count}, rename_station{station,name}, remove_station{station}, station_status{station,status:free|reserved|maintenance}, add_plan{station("todas" ou nome),name,kind:timed|fixed,price,minutes}, set_plan_price{station,plan,price}, add_catalog{name,kind:produto|servico,price}, set_catalog_price{name,price}, add_inventory{name,stock,min}, staff_active{name,active}, charge{amount,days|dueDate"YYYY-MM-DD",note}, billing_block{blocked}, confirm_payment{}, add_ad{title,text,link}, toggle_ads{on}, add_room{name,emoji,content}, notice{title,text}.`,
     `Preços em Kwanzas (número). Se o pedido for só uma pergunta, devolve actions vazio. Nunca inventes ações fora da lista. Se faltar informação essencial, pergunta no "reply" e devolve actions vazio.`,
     `Estado atual: casa "${d.config.houseName}", horário ${d.config.openTime}-${d.config.closeTime}.`,

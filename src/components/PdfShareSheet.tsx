@@ -2,9 +2,9 @@ import { useState } from "react";
 import { Download, Eye, FileText, Minus, Plus, Send, Share2 } from "lucide-react";
 import Sheet from "./Sheet";
 import { ErrorBox, labelCls, fieldCls } from "./ui";
-import type { Config, PdfCaseKey, PdfFontKey, Tone, Transaction } from "../lib/types";
+import type { Config, PdfCaseKey, PdfFontKey, SessionRecord, Tone, Transaction } from "../lib/types";
 import type { Report } from "../lib/reports";
-import { buildReportPdf, dayName, fmtDate, fmtTime, kindLabels, pdfFileName, reportSummaryText } from "../lib/pdf";
+import { buildReportPdf, dayName, fmtDate, fmtTime, kindLabels, reportSummaryText } from "../lib/pdf";
 import { formatAOAshort } from "../lib/format";
 import { cn } from "../utils/cn";
 
@@ -12,6 +12,7 @@ interface Props {
   config: Config;
   report: Report | null;
   txs: Transaction[];
+  machineHistory?: SessionRecord[];
   onPatch: (p: Partial<Config>) => void;
   /** funcionário: usa o número do proprietário e não altera as definições da casa */
   staffName?: string;
@@ -42,12 +43,12 @@ const ddis = [
 
 const sizes = [9, 10, 11, 12, 13, 14];
 
-export default function PdfShareSheet({ config, report, txs, onPatch: patchHouse, staffName, ownCash, notify, toast, onClose }: Props) {
+export default function PdfShareSheet({ config, report, txs, machineHistory = [], onPatch: patchHouse, staffName, ownCash, notify, toast, onClose }: Props) {
   const [err, setErr] = useState("");
   const [localNum, setLocalNum] = useState(config.waNumber);
   const [localDdi, setLocalDdi] = useState(config.waDdi);
   const staff = !!staffName;
-  const who = ownCash ? staffName : undefined;
+  const who = staffName;
   const onPatch = (p: Partial<Config>) => {
     if (!staff) return patchHouse(p);
     if (p.waNumber !== undefined) setLocalNum(p.waNumber);
@@ -70,46 +71,71 @@ export default function PdfShareSheet({ config, report, txs, onPatch: patchHouse
   const validNumber = digits.length >= 9 && digits.length <= 15;
   const pretty = digits ? `+${digits}` : "";
 
-  const make = () => {
+  const loadLogoDataUrl = async (): Promise<string | undefined> => {
+    try {
+      const url = new URL("logo.png", document.baseURI).toString();
+      const response = await fetch(url);
+      if (!response.ok) return undefined;
+      const blob = await response.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Imagem inválida"));
+        reader.onerror = () => reject(new Error("Não foi possível ler o logótipo"));
+        reader.readAsDataURL(blob);
+      });
+    } catch { return undefined; }
+  };
+
+  const make = async () => {
     if (!report) throw new Error("sem relatório");
     const stamp = new Date();
+    const logoDataUrl = await loadLogoDataUrl();
     const doc = buildReportPdf({
-      report, txs, config, now: stamp, who,
+      report, txs, config, now: stamp, who, logoDataUrl, machineHistory,
       opts: { font: config.pdfFont, size: config.pdfSize, textCase: config.pdfCase },
     });
-    return { doc, stamp, name: pdfFileName(config.houseName, report) };
+    const name = `CJ_Relatorio_${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, "0")}-${String(stamp.getDate()).padStart(2, "0")}_${report.kind}.pdf`;
+    return { doc, stamp, name };
   };
 
   const setSize = (n: number) => onPatch({ pdfSize: Math.min(16, Math.max(8, n)) });
 
-  const download = () => {
+  const download = async () => {
     try {
-      const { doc, name } = make();
+      const { doc, name } = await make();
+      const blob = doc.output("blob");
+      if (!(blob instanceof Blob) || blob.size < 100 || blob.type !== "application/pdf") throw new Error("PDF inválido");
       doc.save(name);
-      toast("PDF guardado", name, "green");
+      toast("PDF preparado", `O download de ${name} foi iniciado.`, "green");
       setErr("");
     } catch {
-      setErr("Não foi possível gerar o PDF. Tente novamente.");
+      setErr("Não foi possível gerar o PDF. Verifique a ligação ao ficheiro do logótipo e tente novamente.");
     }
   };
 
-  const preview = () => {
+  const preview = async () => {
+    const w = window.open("about:blank", "_blank");
     try {
-      const { doc } = make();
-      const url = URL.createObjectURL(doc.output("blob"));
-      const w = window.open(url, "_blank");
-      if (!w) { doc.save(pdfFileName(config.houseName, report as Report)); toast("PDF guardado", "O navegador bloqueou a pré-visualização.", "amber"); }
+      const { doc, name } = await make();
+      const blob = doc.output("blob");
+      if (!(blob instanceof Blob) || blob.size < 100 || blob.type !== "application/pdf") throw new Error("PDF inválido");
+      const url = URL.createObjectURL(blob);
+      if (w) w.location.href = url;
+      else { doc.save(name); toast("PDF preparado", "O navegador bloqueou a pré-visualização; o download foi iniciado.", "amber"); }
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       setErr("");
     } catch {
-      setErr("Não foi possível gerar o PDF.");
+      w?.close();
+      setErr("Não foi possível gerar o PDF para pré-visualização.");
     }
   };
 
   /** Abre a partilha do telemóvel com o PDF já anexado (escolha o WhatsApp). */
   const shareFile = async (): Promise<"shared" | "cancelled" | "unsupported"> => {
-    const { doc, stamp, name } = make();
-    const file = new File([doc.output("blob")], name, { type: "application/pdf" });
+    const { doc, stamp, name } = await make();
+    const blob = doc.output("blob");
+    if (!(blob instanceof Blob) || blob.size < 100 || blob.type !== "application/pdf") throw new Error("PDF inválido");
+    const file = new File([blob], name, { type: "application/pdf" });
     const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
     if (!nav.share || !nav.canShare || !nav.canShare({ files: [file] })) return "unsupported";
     try {
@@ -130,7 +156,7 @@ export default function PdfShareSheet({ config, report, txs, onPatch: patchHouse
       if (r === "shared") return notify("PDF pronto para enviar", "Escolha o WhatsApp e o contacto na lista.", "green");
       if (r === "cancelled") return;
       if (!validNumber) return setErr("Este aparelho não anexa o PDF automaticamente. Escreva o número do destinatário para abrir a conversa.");
-      const { doc, stamp, name } = make();
+      const { doc, stamp, name } = await make();
       doc.save(name);
       const url = `https://wa.me/${digits}?text=${encodeURIComponent(reportSummaryText(report, config, stamp, who))}`;
       const w = window.open(url, "_blank");
@@ -187,6 +213,15 @@ export default function PdfShareSheet({ config, report, txs, onPatch: patchHouse
           <p className={cn("mt-1 text-[11px] font-semibold", validNumber ? "text-[#00FF88]" : "text-neutral-500")}>{validNumber ? `Será enviado para ${pretty}` : "Escreva o número com ou sem o indicativo."}</p>
         </div>
 
+        {/* Identidade profissional do documento */}
+        {!staff && <div className="space-y-3 rounded-xl border border-[#00FF88]/20 bg-[#00FF88]/[0.04] p-3">
+          <p className="text-[11px] font-extrabold uppercase tracking-wider text-[#00FF88]">Identidade do PDF</p>
+          <label className="block"><span className={labelCls}>Nome do proprietário</span><input value={config.ownerName} onChange={(e) => onPatch({ ownerName: e.target.value })} placeholder="Nome do proprietário" className={fieldCls} /></label>
+          <label className="block"><span className={labelCls}>Assinatura impressa</span><input value={config.pdfSignature ?? "Cristina e José"} onChange={(e) => onPatch({ pdfSignature: e.target.value })} placeholder="Cristina e José" className={fieldCls} /></label>
+          <label className="block"><span className={labelCls}>Mensagem de suporte no rodapé</span><textarea value={config.pdfSupportNote ?? "Obrigado pela preferência. Em caso de falha, contacte o proprietário."} onChange={(e) => onPatch({ pdfSupportNote: e.target.value })} rows={2} placeholder="Mensagem e contacto em caso de falha" className={fieldCls} /></label>
+          <p className="text-[10.5px] leading-relaxed text-neutral-400">O relatório também utiliza o logótipo do projeto e os contactos registados nas Definições.</p>
+        </div>}
+
         {/* Tipo de letra */}
         {!staff && <div>
           <span className={labelCls}>Tipo de letra</span>
@@ -237,12 +272,15 @@ export default function PdfShareSheet({ config, report, txs, onPatch: patchHouse
         <div>
           <span className={labelCls}>Pré-visualização (A4)</span>
           <div className="rounded-lg bg-white px-3 py-4 shadow-inner" style={sampleStyle}>
+            <div style={{ color: "#08804e", fontWeight: 800, fontSize: "0.8em" }}>CJ GERENCIAMENTO</div>
             <div style={{ fontWeight: 700, fontSize: "1.45em" }}>{config.houseName || "Game House"}</div>
             <div style={{ color: "#006f84", fontWeight: 700 }}>Relatório Financeiro</div>
             <div style={{ marginTop: 6, borderTop: "1px solid #bbb", paddingTop: 6 }}>
               {dayName(now)} • {fmtDate(now)} • {fmtTime(now)}
             </div>
             <div style={{ fontSize: "0.85em", color: "#555" }}>{report ? `${kindLabels[report.kind]}: ${report.title}` : "Relatório Diário"}</div>
+            <div style={{ marginTop: 10, fontFamily: "cursive", color: "#08804e" }}>{config.pdfSignature || "Cristina e José"}</div>
+            <div style={{ fontSize: "0.65em", color: "#555" }}>{config.phone} {config.email ? `· ${config.email}` : ""}</div>
           </div>
         </div>
 

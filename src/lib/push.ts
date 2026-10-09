@@ -25,7 +25,7 @@ export async function initNotifications() {
       await L.createChannel({ id: CH_ALERT, name: "Alertas (tempo esgotado)", description: "Fim de sessões e avisos urgentes", importance: 5, visibility: 1, vibration: true, lights: true });
       await L.createChannel({ id: CH_GENERAL, name: "Avisos da Game House", description: "Vendas, reservas, relatórios e avisos da CJ", importance: 4, visibility: 1, vibration: true });
     }
-  } catch (e) { alert("Init erro: " + (e instanceof Error ? e.message : String(e))); }
+  } catch { /* a app continua utilizável mesmo se o sistema bloquear notificações */ }
 }
 
 export const notifSupported = () => isNative() || (typeof window !== "undefined" && "Notification" in window);
@@ -33,12 +33,13 @@ export const notifPermission = (): Perm => (isNative() ? nativePerm : typeof win
 
 /** Tem de ser chamado a partir de um toque do utilizador. No Android 13+ abre o pedido «Permitir notificações». */
 export async function askNotifPermission(): Promise<Perm> {
-  alert("Diag v4: nativo=" + isNative() + " plataforma=" + (cap()?.getPlatform?.() ?? "nenhuma"));
   if (isNative()) {
     try {
-      const L = await Promise.race([ln(), new Promise<never>((_, no) => setTimeout(() => no(new Error("import do plugin sem resposta em 5s")), 5000))]);
-      const T = <X>(p: Promise<X>) => new Promise<X>((ok, no) => { setTimeout(() => no(new Error("sem resposta em 5s")), 5000); p.then(ok, no); }); const a = await T(L.checkPermissions()); alert("Antes=" + a.display); const b = await T(L.requestPermissions()); nativePerm = mapPerm(b.display); alert("Depois=" + b.display);
-    } catch (e) { alert("Erro notif: " + (e instanceof Error ? e.message : String(e))); }
+      const L = await ln();
+      const before = await L.checkPermissions();
+      nativePerm = mapPerm(before.display);
+      if (nativePerm !== "granted") nativePerm = mapPerm((await L.requestPermissions()).display);
+    } catch { /* mostrar a situação nas definições, sem interromper o utilizador com alertas */ }
     return nativePerm;
   }
   if (!notifSupported()) return "unsupported";
@@ -53,11 +54,12 @@ const nid = (n: number) => Math.abs(Math.floor(n % 2147483000)) || 1;
 let counter = 0;
 
 export async function systemNotify(title: string, body?: string, tag?: string, urgent = false) {
+  const brandedTitle = title.startsWith("CJ Gerenciamento") ? title : `CJ Gerenciamento • ${title}`;
   if (isNative()) {
     if (nativePerm !== "granted") return false;
     try {
       const L = await ln();
-      await L.schedule({ notifications: [{ id: tag ? nid(tag.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) : nid(Date.now() + counter++), title, body: body ?? "", channelId: urgent ? CH_ALERT : CH_GENERAL }] });
+      await L.schedule({ notifications: [{ id: tag ? nid(tag.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) : nid(Date.now() + counter++), title: brandedTitle, body: body ?? "", channelId: urgent ? CH_ALERT : CH_GENERAL }] });
       return true;
     } catch { return false; }
   }
@@ -69,8 +71,8 @@ export async function systemNotify(title: string, body?: string, tag?: string, u
   };
   try {
     const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
-    if (reg) { await reg.showNotification(title, opts); return true; }
-    new Notification(title, opts);
+    if (reg) { await reg.showNotification(brandedTitle, opts); return true; }
+    new Notification(brandedTitle, opts);
     return true;
   } catch {
     return false;
@@ -79,7 +81,15 @@ export async function systemNotify(title: string, body?: string, tag?: string, u
 
 /* ---- Alarmes agendados: o telemóvel avisa na hora certa mesmo com a app fechada ---- */
 export interface DueAlarm { id: number; at: number; title: string; body: string }
-let scheduled = new Set<number>();
+const SCHEDULED_KEY = "cjg-scheduled-alarm-ids";
+const scheduled = new Set<number>(readScheduled());
+function readScheduled(): number[] {
+  try { const v = JSON.parse(localStorage.getItem(SCHEDULED_KEY) ?? "[]"); return Array.isArray(v) ? v.filter((n) => Number.isInteger(n)) : []; }
+  catch { return []; }
+}
+function saveScheduled() {
+  try { localStorage.setItem(SCHEDULED_KEY, JSON.stringify([...scheduled])); } catch { /* opcional */ }
+}
 
 export async function syncAlarms(list: DueAlarm[]) {
   if (!isNative() || nativePerm !== "granted") return;
@@ -88,16 +98,20 @@ export async function syncAlarms(list: DueAlarm[]) {
     const keep = new Set(list.map((a) => nid(a.id)));
     const stale = [...scheduled].filter((i) => !keep.has(i));
     if (stale.length) await L.cancel({ notifications: stale.map((id) => ({ id })) });
+    stale.forEach((id) => scheduled.delete(id));
+    saveScheduled();
     const future = list.filter((a) => a.at > Date.now() + 1000);
     if (future.length) {
       await L.schedule({
         notifications: future.map((a) => ({
-          id: nid(a.id), title: a.title, body: a.body, channelId: CH_ALERT,
+          id: nid(a.id), title: a.title.startsWith("CJ Gerenciamento") ? a.title : `CJ Gerenciamento • ${a.title}`, body: a.body, channelId: CH_ALERT,
           schedule: { at: new Date(a.at), allowWhileIdle: true },
         })),
       });
     }
-    scheduled = new Set(future.map((a) => nid(a.id)));
+    scheduled.clear();
+    future.forEach((a) => scheduled.add(nid(a.id)));
+    saveScheduled();
   } catch { /* ignora */ }
 }
 /* ---- Notificação persistente da máquina com tempo restante ---- */

@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import type { Config, PdfCaseKey, PdfFontKey, Transaction } from "./types";
+import type { Config, PdfCaseKey, PdfFontKey, SessionRecord, Transaction } from "./types";
 import type { Report } from "./reports";
 import { byCategory } from "./categories";
 import { MONTHS, mondayIndex, ymd } from "./dates";
@@ -90,8 +90,10 @@ export function buildReportPdf(a: {
   opts: PdfOpts;
   now: Date;
   who?: string;
+  logoDataUrl?: string;
+  machineHistory?: SessionRecord[];
 }) {
-  const { report, txs, config, opts, now, who } = a;
+  const { report, txs, config, opts, now, who, logoDataUrl, machineHistory = [] } = a;
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
   const W = 210;
   const H = 297;
@@ -108,7 +110,7 @@ export function buildReportPdf(a: {
   const RED: RGB = [190, 40, 60];
 
   const T = (s: string) => applyCase(clean(s), opts.textCase);
-  let y = 20;
+  let y = logoDataUrl ? 31 : 20;
 
   const setF = (style: "normal" | "bold" | "italic", size: number, c: RGB = INK) => {
     doc.setFont(font, style);
@@ -222,7 +224,11 @@ export function buildReportPdf(a: {
   };
 
   /* ------------------------------ Cabeçalho ------------------------------ */
-  centerText(config.houseName || "Game House", S + 10, "bold", INK);
+  if (logoDataUrl) {
+    try { doc.addImage(logoDataUrl, "PNG", CX - 10, 6, 20, 20, "cj-logo", "FAST"); } catch { /* PDF continua válido se o ficheiro de imagem não carregar */ }
+  }
+  centerText("CJ Gerenciamento", S + 3, "bold", GREEN);
+  centerText(config.houseName || "Game House", S + 8, "bold", INK);
   y += 0.5;
   centerText("Relatório Financeiro", S + 3, "bold", TEAL);
   const contact = [config.address, config.phone, config.email].filter(Boolean).join("  |  ");
@@ -299,6 +305,35 @@ export function buildReportPdf(a: {
     );
   }
 
+  /* ------------------------------ Utilização das máquinas ------------------------------ */
+  const machineRows = new Map<string, { count: number; minutes: number; revenue: number }>();
+  machineHistory.filter((item) => item.endedAt >= report.from.getTime() && item.endedAt < report.to.getTime()).forEach((item) => {
+    const key = item.stationName || `Máquina ${item.stationId}`;
+    const row = machineRows.get(key) ?? { count: 0, minutes: 0, revenue: 0 };
+    row.count += 1;
+    row.minutes += Math.max(0, item.endedAt - item.startedAt) / 60000;
+    row.revenue += item.price;
+    machineRows.set(key, row);
+  });
+  if (machineRows.size > 0) {
+    section("Utilização das máquinas");
+    table([50, 25, 40, 65], ["Máquina", "Sessões", "Tempo (min)", "Receita"], [...machineRows.entries()].map(([name, row]) => [name, String(row.count), String(Math.round(row.minutes)), formatAOA(row.revenue)]));
+  }
+
+  /* ------------------------------ Resumo por funcionário ------------------------------ */
+  const employeeRows = new Map<string, { count: number; income: number; expense: number }>();
+  txs.filter((t) => t.ts >= report.from.getTime() && t.ts < report.to.getTime()).forEach((t) => {
+    const key = t.actorName?.trim() || (t.actorId && t.actorId !== "owner" ? "Funcionário" : "Proprietário");
+    const row = employeeRows.get(key) ?? { count: 0, income: 0, expense: 0 };
+    row.count += 1;
+    if (t.type === "in") row.income += t.value; else row.expense += t.value;
+    employeeRows.set(key, row);
+  });
+  if (employeeRows.size > 0) {
+    section("Resumo por funcionário");
+    table([52, 24, 38, 38, 23], ["Responsável", "Mov.", "Receitas", "Despesas", "Saldo"], [...employeeRows.entries()].map(([name, row]) => [name, String(row.count), formatAOA(row.income), formatAOA(row.expense), formatAOA(row.income - row.expense)]));
+  }
+
   /* ------------------------------ Movimentos ------------------------------ */
   const list = txs
     .filter((t) => t.ts >= report.from.getTime() && t.ts < report.to.getTime())
@@ -321,6 +356,18 @@ export function buildReportPdf(a: {
       centerText(`... e mais ${list.length - LIMIT} movimentos (consulte a app para o detalhe completo).`, Math.max(7, S - 1), "italic", GRAY);
     }
   }
+
+  /* ------------------------------ Assinatura e contacto de suporte ------------------------------ */
+  ensure(25);
+  y += 2;
+  rule(CX - 34, CX + 34, 0);
+  y += 5;
+  centerText(config.pdfSignature?.trim() || "Cristina e José", Math.max(9, S), "italic", GREEN);
+  centerText(config.ownerName ? `Proprietário: ${config.ownerName}` : "Proprietário", Math.max(7, S - 1), "normal", GRAY);
+  const support = config.pdfSupportNote?.trim();
+  if (support) centerText(support, Math.max(7, S - 2), "normal", GRAY);
+  const supportContact = [config.phone, config.email].filter(Boolean).join(" | ");
+  if (supportContact) centerText(`Contacto de suporte: ${supportContact}`, Math.max(7, S - 2), "bold", TEAL);
 
   /* ------------------------------ Rodapé + barra topo (todas as páginas) ------------------------------ */
   const n = doc.getNumberOfPages();

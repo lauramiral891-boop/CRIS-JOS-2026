@@ -3,7 +3,7 @@ import {
   ArrowLeft, Bot, Send, ShieldCheck, Activity, CreditCard, Megaphone, DoorOpen, BellRing, Check, X, Trash2, Lock, Copy,
   AlertTriangle, ImagePlus, Users, Brain, MessageCircle, Lightbulb, ChevronUp, ChevronDown, Plus, Eye, Pencil, Home as HomeIcon, Gamepad2,
 } from "lucide-react";
-import type { ActivityEvent, AdminData, Ad, AiMemory, AppData, Game, GlobalAdm, Manager, Room, RoomBlock } from "../lib/types";
+import type { ActivityEvent, AdminData, Ad, AiMemory, AppData, Game, GlobalAdm, Manager, Room, RoomBlock, RoomPost } from "../lib/types";
 import { Field, PrimaryButton, ErrorBox, fieldCls } from "./ui";
 import { RoomView } from "./BillingUI";
 import { safeLink } from "./GamesRoom";
@@ -12,21 +12,21 @@ import { askOnline } from "../lib/assistant";
 import { billInfo, confirmPayment, makeCode, newPayment, rejectPayment, DAY } from "../lib/billing";
 import { admLogin, loadGlobalAdm, loadUnknown, saveGlobalAdm, saveUnknown } from "../lib/adm";
 import { BASE } from "../lib/brain";
-import { ADM_EMAIL, cloudOn, hasSession, sendCode, verifyCode, signOutCloud } from "../lib/cloud";
+import { ADM_EMAIL, cloudOn, hasSession, sendCode, verifyCode, signOutCloud, admAccessLogs, admListAccounts, admSetBilling, type AccountAccessLog, type CloudAdminAccount } from "../lib/cloud";
 import { admDirty, lastPublishError, pushGlobalUp } from "../lib/sync";
 import { waLink } from "./BillingUI";
 import { loadAccounts } from "../lib/accounts";
 import { fileToImage } from "../lib/image";
 import { clockHM, formatAOAshort, timeAgo } from "../lib/format";
-import { defaultData, loadAdminFor, loadDataFor, saveAdminFor, saveDataFor, uid } from "../lib/storage";
+import { defaultAdmin, defaultData, loadAdminFor, loadDataFor, normalizeAdmin, saveAdminFor, saveDataFor, uid } from "../lib/storage";
 import { cn } from "../utils/cn";
 
-type TabId = "live" | "bill" | "ai" | "ads" | "rooms" | "alerts" | "mgrs" | "mem" | "games";
+type TabId = "live" | "bill" | "ai" | "ads" | "rooms" | "alerts" | "mgrs" | "mem" | "games" | "ids";
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "live", label: "Painel", icon: Activity }, { id: "bill", label: "Cobrança", icon: CreditCard }, { id: "ai", label: "IA", icon: Bot },
   { id: "ads", label: "Anúncios", icon: Megaphone }, { id: "rooms", label: "Salas", icon: DoorOpen }, { id: "alerts", label: "Avisos", icon: BellRing },
   { id: "mgrs", label: "Gerentes", icon: Users }, { id: "mem", label: "Memórias", icon: Brain },
-  { id: "games", label: "Jogos", icon: Gamepad2 },
+  { id: "games", label: "Jogos", icon: Gamepad2 }, { id: "ids", label: "IDs / acessos", icon: ShieldCheck },
 ];
 
 interface Msg { id: number; role: "user" | "assistant"; text: string; actions?: AdminAction[]; result?: string[] | "discarded"; busy?: boolean }
@@ -469,6 +469,7 @@ function BlockEditor({ b, onChange, onDelete, onMove, first, last, onWarn }: {
 
 function RoomEditor({ room, onChange, onDone, onWarn }: { room: Room; onChange: (r: Room) => void; onDone: () => void; onWarn: (m: string) => void }) {
   const [preview, setPreview] = useState(false);
+  const [postForm, setPostForm] = useState({ title: "", text: "", link: "", image: "" });
   const blocks = room.blocks ?? [];
   const setBlocks = (b: RoomBlock[]) => onChange({ ...room, blocks: b });
   const move = (i: number, d: -1 | 1) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const c = [...blocks]; [c[i], c[j]] = [c[j], c[i]]; setBlocks(c); };
@@ -492,7 +493,36 @@ function RoomEditor({ room, onChange, onDone, onWarn }: { room: Room; onChange: 
         <div className="flex gap-2">
           {COLORS.map((c) => <button key={c} onClick={() => onChange({ ...room, color: c })} style={{ background: c }} className={cn("h-8 w-8 rounded-full", (room.color || "#00E5FF") === c && "ring-2 ring-white ring-offset-2 ring-offset-[#1b1b1b]")} aria-label={`Cor ${c}`} />)}
         </div>
-        <p className={cn(lbl, "mb-1.5 mt-3")}>Foto de capa</p>
+        <div className="mt-3 rounded-xl border border-[#00E5FF]/20 bg-[#00E5FF]/[0.05] p-3">
+        <p className={cn(lbl, "mb-2")}>Tipo de sala</p>
+        <button onClick={() => onChange({ ...room, community: !room.community })} className={cn(btn, "w-full", room.community ? "bg-[#00E5FF] text-black" : "bg-white/10")}>{room.community ? "Comunidade ativa • posts e comentários" : "Ativar comunidade com posts e comentários"}</button>
+        <p className="mt-1.5 text-[10.5px] text-neutral-500">O ADM publica novidades, imagens e links. Os utilizadores podem comentar; a conversa fica guardada na nuvem quando a migração de comunidade está ativa.</p>
+      </div>
+      {room.community && <div className={cn(card, "mt-3")}>
+        <p className={cn(lbl, "mb-2")}>Nova publicação do ADM</p>
+        <div className="space-y-2">
+          <Input value={postForm.title} onChange={(e) => setPostForm({ ...postForm, title: e.target.value })} placeholder="Título da publicação" />
+          <textarea rows={3} value={postForm.text} onChange={(e) => setPostForm({ ...postForm, text: e.target.value })} placeholder="Descrição, novidades, torneios…" className={fieldCls} />
+          <Input value={postForm.link} onChange={(e) => setPostForm({ ...postForm, link: e.target.value })} placeholder="Link opcional (https://…)" />
+          {postForm.image && <img src={postForm.image} alt="Pré-visualização da publicação" className="h-28 w-full rounded-xl object-cover" />}
+          <PhotoPicker label={postForm.image ? "Trocar fotografia" : "Adicionar fotografia"} maxSide={1000} quality={0.7} onError={onWarn} onPick={(imgs) => setPostForm((f) => ({ ...f, image: imgs[0] ?? "" }))} />
+          <button disabled={!postForm.title.trim() && !postForm.text.trim() && !postForm.image} onClick={() => {
+            const link = postForm.link.trim();
+            const validLink = link ? safeLink(link) : "";
+            if (link && !validLink) { onWarn("O link deve começar por https:// ou http://."); return; }
+            const post: RoomPost = { id: uid(), title: postForm.title.trim() || "Publicação", text: postForm.text.trim(), image: postForm.image || undefined, link: validLink || undefined, createdAt: Date.now() };
+            onChange({ ...room, posts: [post, ...(room.posts ?? [])].slice(0, 100) });
+            setPostForm({ title: "", text: "", link: "", image: "" });
+          }} className={cn(btn, "w-full bg-[#00FF88] text-black")}><Plus size={13} className="mr-1 inline" />Publicar na comunidade</button>
+        </div>
+        {(room.posts ?? []).map((post) => <div key={post.id} className="mt-3 rounded-xl border border-white/10 p-2.5">
+          {post.image && <img src={post.image} alt="" className="mb-2 h-24 w-full rounded-lg object-cover" />}
+          <p className="text-[12px] font-bold">{post.title}</p><p className="mt-1 line-clamp-3 whitespace-pre-line text-[11.5px] text-neutral-400">{post.text}</p>
+          <button onClick={() => onChange({ ...room, posts: (room.posts ?? []).filter((p) => p.id !== post.id) })} className={cn(btn, "mt-2 bg-[#FF4D6D]/15 text-[#FF8FA3]")}><Trash2 size={12} className="mr-1 inline" />Apagar publicação</button>
+        </div>)}
+      </div>}
+
+      <p className={cn(lbl, "mb-1.5 mt-3")}>Foto de capa</p>
         {room.cover && <img src={room.cover} alt="" className="mb-2 h-24 w-full rounded-xl object-cover" />}
         <div className="flex gap-2">
           <div className="flex-1"><PhotoPicker label={room.cover ? "Trocar capa" : "Escolher capa"} maxSide={900} quality={0.74} onError={onWarn} onPick={(im) => onChange({ ...room, cover: im[0] })} /></div>
@@ -518,7 +548,14 @@ function RoomEditor({ room, onChange, onDone, onWarn }: { room: Room; onChange: 
 function RoomsTab({ g, onG, onWarn }: { g: GlobalAdm; onG: OnG; onWarn: (m: string) => void }) {
   const [editId, setEditId] = useState<number | null>(null);
   const editing = g.rooms.find((r) => r.id === editId);
-  const setRoom = (r: Room) => onG((x) => ({ ...x, rooms: x.rooms.map((y) => (y.id === r.id ? r : y)) }));
+  const setRoom = (r: Room) => onG((x) => {
+    const old = x.rooms.find((y) => y.id === r.id);
+    const freshPost = (r.posts ?? []).find((p) => !(old?.posts ?? []).some((op) => op.id === p.id));
+    const notices = freshPost
+      ? [{ id: uid(), ts: Date.now(), title: `Nova publicação: ${r.name}`, text: `${freshPost.title}${freshPost.text ? ` — ${freshPost.text.slice(0, 140)}` : ""}` }, ...x.notices].slice(0, 50)
+      : x.notices;
+    return { ...x, rooms: x.rooms.map((y) => (y.id === r.id ? r : y)), notices };
+  });
   if (editing) return <RoomEditor room={editing} onChange={setRoom} onDone={() => setEditId(null)} onWarn={onWarn} />;
   const create = (t: (typeof TEMPLATES)[number]) => {
     const room: Room = { id: uid(), content: "", active: true, ...t.make() };
@@ -733,6 +770,49 @@ function CloudBar({ g, onPublished }: { g: GlobalAdm; onPublished: () => void })
   );
 }
 
+/* ---------------- IDs e registo de acessos ---------------- */
+function AccessIdsTab({ onOpenBilling }: { onOpenBilling: (account: CloudAdminAccount) => void }) {
+  const [logs, setLogs] = useState<AccountAccessLog[]>([]);
+  const [cloudAccounts, setCloudAccounts] = useState<CloudAdminAccount[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const localAccounts = loadAccounts().filter((a) => !a.shadow);
+  const refresh = async () => {
+    setBusy(true); setError("");
+    const [r, a] = await Promise.all([admAccessLogs(), admListAccounts()]);
+    if (r.ok) setLogs(r.data);
+    if (a.ok) setCloudAccounts(a.data);
+    if (!r.ok || !a.ok) setError("A lista global ainda não está disponível. Ative a migração supabase/access-audit.sql no projeto Supabase para reunir contas e acessos de todos os telemóveis.");
+    setBusy(false);
+  };
+  useEffect(() => { void refresh(); }, []);
+  return (
+    <div className="thin-scroll flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div className={card}>
+        <p className="flex items-center gap-2 text-[13px] font-extrabold uppercase"><ShieldCheck size={15} className="text-[#00FF88]" /> IDs de contas e acessos</p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-neutral-400">Mostra os IDs locais e, quando a auditoria da nuvem estiver ativa, os acessos registados em todos os telemóveis. Não guarda palavras-passe.</p>
+        <button onClick={() => void refresh()} disabled={busy} className={cn(btn, "mt-3 w-full bg-[#00E5FF] text-black")}>{busy ? "A atualizar…" : "Atualizar registo da nuvem"}</button>
+      </div>
+      {error && <p className="rounded-xl border border-[#FFC107]/30 bg-[#FFC107]/10 p-3 text-[11.5px] text-[#FFD66B]">{error}</p>}
+      <p className={lbl}>Contas da nuvem ({cloudAccounts.length})</p>
+      {cloudAccounts.map((a) => <div key={a.owner_uid} className={card}>
+        <p className="break-all font-mono text-[13px] font-extrabold text-[#00E5FF]">{a.account_id}</p>
+        <p className="mt-1 text-[12px] font-semibold">{a.house_name || "Game House sem nome"}</p>
+        <p className="text-[11px] text-neutral-400">{a.email || "Email não disponível"}</p>
+        <p className="mt-1 text-[10.5px] text-neutral-500">Última alteração: {new Date(a.updated_at).toLocaleString("pt-AO")}</p>
+        <button onClick={() => onOpenBilling(a)} className={cn(btn, "mt-2 w-full bg-[#FFC107] text-black")}><CreditCard size={13} className="mr-1 inline" />Abrir cobrança / liberar acesso</button>
+      </div>)}
+      <p className={lbl}>Acessos registados na nuvem ({logs.length})</p>
+      {logs.map((log) => <div key={log.id} className={card}>
+        <div className="flex items-start gap-2"><div className="min-w-0 flex-1"><p className="break-all font-mono text-[13px] font-extrabold text-[#00E5FF]">{log.account_id}</p><p className="mt-1 text-[12px] font-semibold">{log.house_name || "Game House sem nome"}</p><p className="text-[11px] text-neutral-400">{log.email || "Email não disponível"} • {log.role === "staff" ? "Funcionário" : "Proprietário"}</p><p className="mt-1 text-[10.5px] text-neutral-500">{new Date(log.accessed_at).toLocaleString("pt-AO")}</p></div></div>
+      </div>)}
+      <p className={lbl}>Contas guardadas neste dispositivo ({localAccounts.length})</p>
+      {localAccounts.map((a) => <div key={a.id} className={cn(card, "py-3")}><p className="break-all font-mono text-[13px] font-extrabold text-[#00FF88]">{a.id}</p><p className="mt-1 text-[12px]">{a.houseName || "Game House sem nome"}</p><p className="text-[11px] text-neutral-400">{a.login}</p><p className="text-[10.5px] text-neutral-500">Criada em {new Date(a.createdAt).toLocaleString("pt-AO")}</p></div>)}
+      {!logs.length && !localAccounts.length && <p className="py-8 text-center text-[12px] text-neutral-500">Ainda não há IDs registados.</p>}
+    </div>
+  );
+}
+
 /* ---------------- sala ---------------- */
 export default function AdminRoom({ onClose }: { onClose: () => void }) {
   const [unlocked, setUnlocked] = useState(false);
@@ -740,6 +820,9 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
   const [g, setG] = useState<GlobalAdm>(() => loadGlobalAdm());
   const [warn, setWarn] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  const [remoteHouse, setRemoteHouse] = useState<CloudAdminAccount | null>(null);
+  const [remoteAdmin, setRemoteAdmin] = useState<AdminData | null>(null);
+  const remoteSaveChain = useRef<Promise<unknown>>(Promise.resolve());
 
   const houses = loadAccounts().filter((a) => !a.shadow);
   const [houseId, setHouseId] = useState<string>(() => houses[0]?.id ?? "");
@@ -770,7 +853,24 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
   };
 
   const house = houses.find((h) => h.id === houseId);
-  const pending = ha.billing.payments.filter((x) => x.status === "pending").length;
+  const openRemoteBilling = (a: CloudAdminAccount) => {
+    setRemoteHouse(a);
+    const base = defaultAdmin();
+    setRemoteAdmin(normalizeAdmin({ ...base, houseId: a.account_id, billing: { ...base.billing, ...(a.billing ?? {}), payments: a.billing?.payments ?? [] } }));
+    setTab("bill");
+  };
+  const onRemoteAdmin: OnAdmin = (fn) => {
+    if (!remoteHouse || !remoteAdmin) return;
+    const next = fn(remoteAdmin);
+    setRemoteAdmin(next);
+    const ownerUid = remoteHouse.owner_uid;
+    remoteSaveChain.current = remoteSaveChain.current.then(async () => {
+      const r = await admSetBilling(ownerUid, next.billing);
+      if (!r.ok || !r.data.ok) setWarn(r.ok ? "O Supabase não confirmou a alteração da cobrança." : r.error);
+      else setWarn("");
+    }).catch(() => setWarn("Não foi possível guardar a cobrança remota. Verifique a ligação e tente novamente."));
+  };
+  const pending = (remoteHouse ? remoteAdmin?.billing : ha.billing)?.payments.filter((x) => x.status === "pending").length ?? 0;
   const needsHouse = tab === "live" || tab === "bill" || tab === "ai";
 
   /** A IA mexe na casa escolhida (dados + cobrança) e nos dados globais (anúncios, salas, avisos). */
@@ -815,7 +915,7 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
         <>
           <div className="no-scrollbar flex gap-1.5 overflow-x-auto border-b border-white/[0.06] px-3 py-2">
             {TABS.map((t) => (
-              <button key={t.id} onClick={() => setTab(t.id)} className={cn("relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-bold", tab === t.id ? "bg-[#00E5FF] text-black" : "bg-white/[0.06] text-neutral-300")}>
+              <button key={t.id} onClick={() => { setTab(t.id); if (t.id !== "bill") { setRemoteHouse(null); setRemoteAdmin(null); } }} className={cn("relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-bold", tab === t.id ? "bg-[#00E5FF] text-black" : "bg-white/[0.06] text-neutral-300")}>
                 <t.icon size={13} />{t.label}
                 {t.id === "bill" && pending > 0 && <span className="grid h-4 min-w-4 place-items-center rounded-full bg-[#FF4D6D] px-1 text-[9px] text-white">{pending}</span>}
               </button>
@@ -824,14 +924,15 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
           <CloudBar g={g} onPublished={() => setWarn("")} />
           {warn && <p className="mx-3 mt-2 rounded-xl border border-[#FF4D6D]/40 bg-[#FF4D6D]/10 px-3 py-2 text-[11.5px] font-semibold text-[#FF8FA3]">{warn}</p>}
           {needsHouse && (
-            houses.length === 0 && tab !== "ai" ? (
+            houses.length === 0 && !remoteHouse && tab !== "ai" ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
                 <HomeIcon size={30} className="text-neutral-600" />
                 <p className="text-[13px] text-neutral-400">Ainda não há casas criadas neste telemóvel. Anúncios, salas e avisos já funcionam nos outros separadores.</p>
               </div>
             ) : (
               <>
-                {houses.length > 0 && (
+                {remoteHouse && tab === "bill" && <div className="mx-3 mt-2 rounded-xl border border-[#FFC107]/30 bg-[#FFC107]/10 p-3"><p className="text-[11px] font-bold uppercase text-[#FFD66B]">Cobrança remota</p><p className="mt-1 break-all font-mono text-[12px] font-extrabold">{remoteHouse.account_id}</p><p className="text-[11px] text-neutral-300">{remoteHouse.house_name} • {remoteHouse.email}</p><button onClick={() => { setRemoteHouse(null); setRemoteAdmin(null); setTab("ids"); }} className={cn(btn, "mt-2 bg-white/10")}>Voltar aos IDs e contas</button></div>}
+                {houses.length > 0 && !remoteHouse && (
                   <div className="no-scrollbar flex items-center gap-1.5 overflow-x-auto px-3 pt-2">
                     <span className="shrink-0 text-[10.5px] font-bold uppercase text-neutral-500">Casa:</span>
                     {houses.map((h) => <button key={h.id} onClick={() => setHouseId(h.id)} className={cn("shrink-0 rounded-full border px-3 py-1 text-[12px] font-semibold", h.id === houseId ? "border-[#FFC107] bg-[#FFC107]/15 text-[#FFC107]" : "border-white/10 text-neutral-300")}>{h.houseName}</button>)}
@@ -839,9 +940,9 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
                 )}
                 {tab === "live" && hd && <LiveTab data={hd} admin={ha} now={now} />}
                 {tab === "live" && !hd && <p className="px-6 pt-10 text-center text-[13px] text-neutral-500">{house ? `${house.houseName} ainda não terminou a configuração.` : "Escolha uma casa."}</p>}
-                {tab === "bill" && <BillTab key={houseId} admin={ha} now={now} onAdmin={onAdmin} />}
+                {tab === "bill" && (remoteHouse && remoteAdmin ? <BillTab key={remoteHouse.owner_uid} admin={remoteAdmin} now={now} onAdmin={onRemoteAdmin} /> : <BillTab key={houseId} admin={ha} now={now} onAdmin={onAdmin} />)}
                 {tab === "ai" && (
-                  <AiTab world={{ data: hd ?? defaultData(), admin: { ...ha, ads: g.ads, adsOn: g.adsOn, rooms: g.rooms } }} aiKey={hd?.config.aiKey ?? ""} onApply={applyActions} hasHouse={!!house} />
+                  <AiTab world={{ data: hd ?? defaultData(), admin: { ...ha, ads: g.ads, adsOn: g.adsOn, rooms: g.rooms } }} aiKey={""} onApply={applyActions} hasHouse={!!house} />
                 )}
               </>
             )
@@ -852,6 +953,7 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
           {tab === "mgrs" && <ManagersTab g={g} onG={onG} />}
           {tab === "mem" && <MemoryTab g={g} onG={onG} />}
           {tab === "games" && <GamesTab g={g} onG={onG} onWarn={setWarn} />}
+          {tab === "ids" && <AccessIdsTab onOpenBilling={openRemoteBilling} />}
         </>
       )}
     </div>

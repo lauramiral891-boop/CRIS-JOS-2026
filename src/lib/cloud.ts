@@ -2,6 +2,8 @@
    dados de cada casa e conteúdo global do ADM. Se as variáveis não estiverem
    definidas, a app continua a funcionar só neste telemóvel (modo local). */
 
+import type { Billing } from "./types";
+
 // const env removido para compatibilidade Vite
 /* aceita os nomes VITE_… e também os do painel do Supabase (NEXT_PUBLIC_…) */
 const URL_ = (import.meta.env.VITE_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
@@ -143,6 +145,13 @@ async function token(email: string): Promise<string | null> {
   } catch { return null; }
 }
 
+/** Token de acesso para chamadas autenticadas às Supabase Edge Functions. Nunca é registado em logs. */
+export async function getCloudAccessToken(email: string): Promise<string | null> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  return token(normalized);
+}
+
 /* ---------- chamada de funções do servidor (RPC) ---------- */
 async function rpc<T>(fn: string, args: Record<string, unknown>, email?: string): Promise<Res<T>> {
   let t: string | null = null;
@@ -261,6 +270,63 @@ export async function staffPush(tok: string, data: unknown, baseRev: number): Pr
 
 export async function staffLogout(tok: string): Promise<void> {
   try { await rpc("staff_logout", { p_token: tok }); } catch { /* ignora */ }
+}
+
+/* ---------- auditoria de acessos globais (requer supabase/access-audit.sql) ---------- */
+export interface AccountAccessLog {
+  id: number;
+  account_id: string;
+  email: string | null;
+  house_name: string;
+  role: "owner" | "staff";
+  accessed_at: string;
+}
+
+export async function logOwnerAccess(email: string, accountId: string, houseName: string): Promise<void> {
+  try { await rpc("log_owner_access", { p_account_id: accountId, p_house_name: houseName }, email); } catch { /* auditoria nunca bloqueia o login */ }
+}
+
+export async function logStaffAccess(tokenValue: string, accountId: string, houseName: string): Promise<void> {
+  try { await rpc("log_staff_access", { p_token: tokenValue, p_account_id: accountId, p_house_name: houseName }); } catch { /* auditoria nunca bloqueia o login */ }
+}
+
+export async function admAccessLogs(): Promise<Res<AccountAccessLog[]>> {
+  return rpc<AccountAccessLog[]>("adm_access_logs", {}, ADM_EMAIL);
+}
+
+export interface CloudAdminAccount {
+  owner_uid: string;
+  account_id: string;
+  email: string;
+  house_name: string;
+  billing: Billing | null;
+  updated_at: string;
+}
+
+export async function admListAccounts(): Promise<Res<CloudAdminAccount[]>> {
+  return rpc<CloudAdminAccount[]>("adm_list_accounts", {}, ADM_EMAIL);
+}
+
+export async function admSetBilling(ownerUid: string, billing: Billing): Promise<Res<{ ok: boolean }>> {
+  return rpc<{ ok: boolean }>("adm_set_billing", { p_owner_uid: ownerUid, p_billing: billing }, ADM_EMAIL);
+}
+
+export interface CommunityComment {
+  id: number;
+  room_id: string;
+  account_id?: string;
+  author_name: string;
+  body: string;
+  created_at: string;
+}
+
+export async function listCommunityComments(roomId: number | string): Promise<Res<CommunityComment[]>> {
+  return rpc<CommunityComment[]>("community_list_comments", { p_room_id: String(roomId) });
+}
+
+export async function addCommunityComment(input: { roomId: number | string; accountId: string; authorName: string; body: string; email?: string; staffToken?: string }): Promise<Res<CommunityComment>> {
+  const args = { p_room_id: String(input.roomId), p_account_id: input.accountId, p_author_name: input.authorName, p_body: input.body, p_staff_token: input.staffToken || null };
+  return rpc<CommunityComment>("community_add_comment", args, input.staffToken ? undefined : input.email);
 }
 
 /* ---------- conteúdo global do ADM ---------- */

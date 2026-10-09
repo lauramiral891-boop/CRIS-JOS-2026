@@ -1,0 +1,2 @@
+[functions.cj-gemini]
+verify_jwt = true
