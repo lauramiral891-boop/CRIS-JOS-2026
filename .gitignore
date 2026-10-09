@@ -1,6 +1,7 @@
 node_modules/
 dist/
-_backup_icons/
-*.log
-.vercel
-.env*
+.env
+.env.*
+!.env.example
+*.bak
+*.bak[0-9]

@@ -79,6 +79,56 @@ export async function verifyCode(email: string, code: string): Promise<Res<{ uid
   } catch { return { ok: false, error: offline }; }
 }
 
+
+export async function loginCloudPassword(email: string, password: string): Promise<Res<{uid:string}>> {
+  if (!cloudOn()) return {ok:false,error:"Nuvem não configurada."};
+  const normalized = email.trim().toLowerCase();
+  try {
+    const r = await raw("/auth/v1/token?grant_type=password", {
+      method:"POST",
+      body:JSON.stringify({email:normalized,password})
+    });
+    if (!r.ok) {
+      if (r.status === 400 || r.status === 401) {
+        return {ok:false,error:"Email ou palavra-passe incorretos."};
+      }
+      return {ok:false,error:await errText(r,"Não foi possível entrar na nuvem.")};
+    }
+    const j = await r.json() as {access_token:string;refresh_token:string;expires_in?:number;user?:{id:string}};
+    if (!j.access_token || !j.refresh_token) {
+      return {ok:false,error:"A nuvem não devolveu uma sessão válida."};
+    }
+    const s:Stored = {
+      access:j.access_token,
+      refresh:j.refresh_token,
+      exp:Date.now()+(j.expires_in??3600)*1000,
+      uid:j.user?.id??""
+    };
+    writeS(normalized,s);
+    return {ok:true,data:{uid:s.uid}};
+  } catch {
+    return {ok:false,error:offline};
+  }
+}
+
+export async function setCloudPassword(email: string, password: string): Promise<Res> {
+  const access = await token(email);
+  if (!access) return {ok:false,error:"Sem sessão na nuvem. Entre novamente por email."};
+  try {
+    const r = await raw("/auth/v1/user", {
+      method:"PUT",
+      token:access,
+      body:JSON.stringify({password})
+    });
+    if (!r.ok) {
+      return {ok:false,error:await errText(r,"Não foi possível configurar a palavra-passe da nuvem.")};
+    }
+    return {ok:true,data:undefined};
+  } catch {
+    return {ok:false,error:offline};
+  }
+}
+
 async function token(email: string): Promise<string | null> {
   const s = readS(email);
   if (!s) return null;

@@ -314,17 +314,23 @@ export function wipeShadow(accountId: string) {
 export async function leaveShadow(accountId: string, io: IO): Promise<void> {
   if (!getAccount(accountId)?.shadow) return;
   const t = loadStaffToken(accountId);
-  let clean = true;
-  if (t) {
-    await Promise.race([runSync(accountId, { kind: "staff", token: t.token }, io), new Promise((r) => setTimeout(r, 4000))]);
-    const b = loadBase(accountId);
-    clean = !!b && snapEq(io.read(), b.snap);
-    void staffLogout(t.token);
+  if (!t) return;
+  let synced = false;
+  try {
+    synced = await Promise.race([
+      runSync(accountId, { kind: "staff", token: t.token }, io).then((r) => !!r?.ok),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 4000)),
+    ]);
+  } catch {
+    return;
   }
+  if (!synced) return;
+  const base = loadBase(accountId);
+  if (!base || !snapEq(io.read(), base.snap)) return;
+  void staffLogout(t.token);
   clearStaffToken(accountId);
-  if (clean) wipeShadow(accountId);
+  wipeShadow(accountId);
 }
-
 /* ---------- conteúdo global do ADM ---------- */
 const getStamp = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
 const setStamp = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignora */ } };

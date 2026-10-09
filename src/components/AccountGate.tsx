@@ -6,7 +6,7 @@ import { fileToPhoto } from "../lib/image";
 import {
   CODE_TTL_MIN, MIN_PASS, cancelSignup, completeSignup, loginOwner, parseLogin, loginStaff, resendCode, staffKnownLocally, startSignup, updateAccount, verifySignup, type Account,
 } from "../lib/accounts";
-import { cloudOn, sendCode, verifyCode } from "../lib/cloud";
+import { cloudOn, sendCode, verifyCode, loginCloudPassword, setCloudPassword } from "../lib/cloud";
 import { loginStaffCloud, pushAccount, restoreAccount } from "../lib/sync";
 import { hashPass } from "../lib/auth";
 
@@ -122,13 +122,19 @@ export default function AccountGate({ onOwnerEnter, onStaffEnter, onAdm }: Props
   const submitCode = async () => {
     if (busy) return;
     let r;
+    let syncFailed = false;
     if (cloud) {
       if (code.replace(/\D/g, "").length !== 6) return setErr("Introduza os 6 dígitos do código.");
       setBusy(true);
       const v = await verifyCode(pendLogin, code);
       if (!v.ok) { setBusy(false); return setErr(v.error); }
+      const passwordResult = await setCloudPassword(pendLogin, pw);
+      if (!passwordResult.ok) {
+        setBusy(false);
+        return setErr(passwordResult.error + " Pode recuperar a conta pelo email.");
+      }
       r = completeSignup(pendLogin);
-      if (r.ok) await pushAccount(r.account.id, true);
+      if (r.ok) syncFailed = !(await pushAccount(r.account.id, true));
       setBusy(false);
     } else r = verifySignup(pendLogin, code);
     if (!r.ok) {
@@ -136,13 +142,11 @@ export default function AccountGate({ onOwnerEnter, onStaffEnter, onAdm }: Props
       if (r.dead) { setShownCode(""); setView("signup"); }
       return;
     }
-    // conta criada → volta ao ecrã de entrada para entrar com os dados
     setLid(pendShow); setLpw(""); setPw(""); setPw2("");
     setPhoto(""); setHouse(""); setOwner(""); setId(""); setShownCode(""); setCode("");
     setView("login"); setErr("");
-    setOk(`Conta criada com sucesso! O seu ID é ${r.account.id}. Agora entre com os seus dados.`);
+    setOk(syncFailed ? "Conta criada, mas não foi possível confirmar a gravação na nuvem. Não crie outra conta. Verifique a internet e use a opção de recuperação por email. ID: " + r.account.id : "Conta criada com sucesso! O seu ID é " + r.account.id + ". Agora entre com os seus dados.");
   };
-
   const resend = async () => {
     if (cloud) {
       const sent = await sendCode(pendLogin);
@@ -158,14 +162,46 @@ export default function AccountGate({ onOwnerEnter, onStaffEnter, onAdm }: Props
   const backFromVerify = () => { cancelSignup(pendLogin); setShownCode(""); go("signup"); };
 
   /* ---- 3. entrar ---- */
-  const submitLogin = () => {
-    if (!lid.trim() || !lpw) return setErr("Preencha o email/número e a palavra-passe.");
-    const r = loginOwner(lid, lpw);
-    if (!r.ok) return setErr(r.error);
-    onOwnerEnter(r.account);
-  };
+  const submitLogin = async () => {
+  if (!lid.trim() || !lpw) return setErr("Preencha o email/número e a palavra-passe.");
+  const local = loginOwner(lid, lpw);
+  const parsed = parseLogin(lid);
 
-  /* ---- recuperar conta da nuvem (outro telemóvel / palavra-passe esquecida) ---- */
+  if (cloud && parsed.ok && parsed.kind === "email") {
+    setBusy(true);
+    const cloudLogin = await loginCloudPassword(parsed.login, lpw);
+
+    if (cloudLogin.ok) {
+      if (local.ok) {
+        const synced = await pushAccount(local.account.id);
+        setBusy(false);
+        if (!synced) {
+          return setErr("Não foi possível sincronizar os dados. Verifique a ligação e tente novamente.");
+        }
+        onOwnerEnter(local.account);
+        return;
+      }
+
+      const restored = await restoreAccount(parsed.login);
+      if (!restored.ok) {
+        setBusy(false);
+        return setErr(restored.error);
+      }
+
+      const updated = updateAccount(restored.account.id, { passHash: hashPass(lpw) });
+      setBusy(false);
+      onOwnerEnter(updated ?? restored.account);
+      return;
+    }
+
+    setBusy(false);
+  }
+
+  if (!local.ok) return setErr(local.error);
+  onOwnerEnter(local.account);
+};
+
+/* ---- recuperar conta da nuvem (outro telemóvel / palavra-passe esquecida) ---- */
   const restoreSend = async () => {
     const p = parseLogin(rMail);
     if (!p.ok || p.kind !== "email") return setErr("Escreva o email da sua conta.");
@@ -177,20 +213,26 @@ export default function AccountGate({ onOwnerEnter, onStaffEnter, onAdm }: Props
   };
   const restoreDo = async () => {
     if (rCode.replace(/\D/g, "").length !== 6) return setErr("Introduza os 6 dígitos do código.");
-    if (rPw.length < MIN_PASS) return setErr(`A nova palavra-passe deve ter pelo menos ${MIN_PASS} caracteres.`);
+    if (rPw.length < MIN_PASS) return setErr("A nova palavra-passe deve ter pelo menos " + MIN_PASS + " caracteres.");
     setBusy(true);
     const v = await verifyCode(rMail, rCode);
     if (!v.ok) { setBusy(false); return setErr(v.error); }
+
+    const passwordResult = await setCloudPassword(rMail, rPw);
+    if (!passwordResult.ok) {
+      setBusy(false);
+      return setErr(passwordResult.error);
+    }
+
     const r = await restoreAccount(rMail);
     if (!r.ok) { setBusy(false); return setErr(r.error); }
-    updateAccount(r.account.id, { passHash: hashPass(rPw) });
+    const updated = updateAccount(r.account.id, { passHash: hashPass(rPw) });
     await pushAccount(r.account.id, true);
     setBusy(false);
     setLid(rMail); setLpw(""); setRStage(0); setRCode(""); setRPw("");
     setView("login"); setErr("");
-    setOk(`Conta recuperada! O seu ID é ${r.account.id}. Entre com a nova palavra-passe.`);
+    setOk("Conta recuperada! O seu ID é " + r.account.id + ". Entre com a nova palavra-passe.");
   };
-
   const submitStaff = async () => {
     if (busy) return;
     if (!invite.trim() || !user.trim() || !spw) return setErr("Preencha os três campos.");
