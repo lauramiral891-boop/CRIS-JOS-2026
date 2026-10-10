@@ -126,7 +126,7 @@ export default function SettingsScreen(p: Props) {
   ];
 
   const renderRow = (r: Row) => (
-    <button key={r.label} data-guide-id={r.label === "Funcionários" ? "staff" : r.label === "Relatório PDF e WhatsApp" ? "pdf-settings" : undefined} onClick={r.action} className="flex w-full items-center gap-3 bg-[#1e1e1e] px-3.5 py-[13px] text-left transition active:bg-[#2a2a2a]">
+    <button key={r.label} onClick={r.action} className="flex w-full items-center gap-3 bg-[#1e1e1e] px-3.5 py-[13px] text-left transition active:bg-[#2a2a2a]">
       <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/[0.05]", r.color)}>
         <r.icon size={16} />
       </span>
@@ -168,7 +168,7 @@ export default function SettingsScreen(p: Props) {
       ))}
 
       <p className="pt-1 text-center text-[10.5px] font-medium text-neutral-600">
-        CJ GERENCIAMENTO v5.7.0 • Feito em Angola 🇦🇴
+        CJ GERENCIAMENTO v4.5.0 • Feito em Angola 🇦🇴
       </p>
 
       {sheet === "profile" && (

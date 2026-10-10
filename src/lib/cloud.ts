@@ -2,12 +2,11 @@
    dados de cada casa e conteúdo global do ADM. Se as variáveis não estiverem
    definidas, a app continua a funcionar só neste telemóvel (modo local). */
 
-import type { Billing } from "./types";
-
 // const env removido para compatibilidade Vite
 /* aceita os nomes VITE_… e também os do painel do Supabase (NEXT_PUBLIC_…) */
-const URL_ = (import.meta.env.VITE_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
-const KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? "").trim();
+const env = import.meta.env;
+const URL_ = (env.VITE_SUPABASE_URL ?? env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
+const KEY = (env.VITE_SUPABASE_ANON_KEY ?? env.VITE_SUPABASE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim();
 export const ADM_EMAIL = (import.meta.env.VITE_ADM_EMAIL ?? "tvvibeoficial@gmail.com").trim().toLowerCase();
 
 export const cloudOn = () => !!URL_ && !!KEY;
@@ -81,56 +80,6 @@ export async function verifyCode(email: string, code: string): Promise<Res<{ uid
   } catch { return { ok: false, error: offline }; }
 }
 
-
-export async function loginCloudPassword(email: string, password: string): Promise<Res<{uid:string}>> {
-  if (!cloudOn()) return {ok:false,error:"Nuvem não configurada."};
-  const normalized = email.trim().toLowerCase();
-  try {
-    const r = await raw("/auth/v1/token?grant_type=password", {
-      method:"POST",
-      body:JSON.stringify({email:normalized,password})
-    });
-    if (!r.ok) {
-      if (r.status === 400 || r.status === 401) {
-        return {ok:false,error:"Email ou palavra-passe incorretos."};
-      }
-      return {ok:false,error:await errText(r,"Não foi possível entrar na nuvem.")};
-    }
-    const j = await r.json() as {access_token:string;refresh_token:string;expires_in?:number;user?:{id:string}};
-    if (!j.access_token || !j.refresh_token) {
-      return {ok:false,error:"A nuvem não devolveu uma sessão válida."};
-    }
-    const s:Stored = {
-      access:j.access_token,
-      refresh:j.refresh_token,
-      exp:Date.now()+(j.expires_in??3600)*1000,
-      uid:j.user?.id??""
-    };
-    writeS(normalized,s);
-    return {ok:true,data:{uid:s.uid}};
-  } catch {
-    return {ok:false,error:offline};
-  }
-}
-
-export async function setCloudPassword(email: string, password: string): Promise<Res> {
-  const access = await token(email);
-  if (!access) return {ok:false,error:"Sem sessão na nuvem. Entre novamente por email."};
-  try {
-    const r = await raw("/auth/v1/user", {
-      method:"PUT",
-      token:access,
-      body:JSON.stringify({password})
-    });
-    if (!r.ok) {
-      return {ok:false,error:await errText(r,"Não foi possível configurar a palavra-passe da nuvem.")};
-    }
-    return {ok:true,data:undefined};
-  } catch {
-    return {ok:false,error:offline};
-  }
-}
-
 async function token(email: string): Promise<string | null> {
   const s = readS(email);
   if (!s) return null;
@@ -145,11 +94,44 @@ async function token(email: string): Promise<string | null> {
   } catch { return null; }
 }
 
-/** Token de acesso para chamadas autenticadas às Supabase Edge Functions. Nunca é registado em logs. */
-export async function getCloudAccessToken(email: string): Promise<string | null> {
-  const normalized = email.trim().toLowerCase();
-  if (!normalized) return null;
-  return token(normalized);
+
+/* ---------- códigos de ativação no servidor ---------- */
+export async function licenseRequest(
+  action: "generate" | "redeem",
+  payload: { houseId: string; until?: number; code?: string },
+  email?: string,
+): Promise<Res<Record<string, unknown>>> {
+  if (!cloudOn()) return { ok: false, error: "Nuvem não configurada." };
+
+  let t: string | null = null;
+  if (email) {
+    t = await token(email);
+    if (!t) return { ok: false, error: "Inicie sessão como ADM para gerar códigos." };
+  }
+
+  try {
+    const r = await raw("/functions/v1/cj-license", {
+      method: "POST",
+      token: t ?? undefined,
+      body: JSON.stringify({ action, ...payload }),
+    });
+
+    if (!r.ok) {
+      return { ok: false, error: await errText(r, "Não foi possível contactar o serviço de ativação.") };
+    }
+
+    const data = await r.json() as Record<string, unknown>;
+    if (data.ok === false) {
+      return {
+        ok: false,
+        error: typeof data.error === "string" ? data.error : "O servidor recusou o pedido.",
+      };
+    }
+
+    return { ok: true, data };
+  } catch {
+    return { ok: false, error: offline };
+  }
 }
 
 /* ---------- chamada de funções do servidor (RPC) ---------- */
@@ -270,63 +252,6 @@ export async function staffPush(tok: string, data: unknown, baseRev: number): Pr
 
 export async function staffLogout(tok: string): Promise<void> {
   try { await rpc("staff_logout", { p_token: tok }); } catch { /* ignora */ }
-}
-
-/* ---------- auditoria de acessos globais (requer supabase/access-audit.sql) ---------- */
-export interface AccountAccessLog {
-  id: number;
-  account_id: string;
-  email: string | null;
-  house_name: string;
-  role: "owner" | "staff";
-  accessed_at: string;
-}
-
-export async function logOwnerAccess(email: string, accountId: string, houseName: string): Promise<void> {
-  try { await rpc("log_owner_access", { p_account_id: accountId, p_house_name: houseName }, email); } catch { /* auditoria nunca bloqueia o login */ }
-}
-
-export async function logStaffAccess(tokenValue: string, accountId: string, houseName: string): Promise<void> {
-  try { await rpc("log_staff_access", { p_token: tokenValue, p_account_id: accountId, p_house_name: houseName }); } catch { /* auditoria nunca bloqueia o login */ }
-}
-
-export async function admAccessLogs(): Promise<Res<AccountAccessLog[]>> {
-  return rpc<AccountAccessLog[]>("adm_access_logs", {}, ADM_EMAIL);
-}
-
-export interface CloudAdminAccount {
-  owner_uid: string;
-  account_id: string;
-  email: string;
-  house_name: string;
-  billing: Billing | null;
-  updated_at: string;
-}
-
-export async function admListAccounts(): Promise<Res<CloudAdminAccount[]>> {
-  return rpc<CloudAdminAccount[]>("adm_list_accounts", {}, ADM_EMAIL);
-}
-
-export async function admSetBilling(ownerUid: string, billing: Billing): Promise<Res<{ ok: boolean }>> {
-  return rpc<{ ok: boolean }>("adm_set_billing", { p_owner_uid: ownerUid, p_billing: billing }, ADM_EMAIL);
-}
-
-export interface CommunityComment {
-  id: number;
-  room_id: string;
-  account_id?: string;
-  author_name: string;
-  body: string;
-  created_at: string;
-}
-
-export async function listCommunityComments(roomId: number | string): Promise<Res<CommunityComment[]>> {
-  return rpc<CommunityComment[]>("community_list_comments", { p_room_id: String(roomId) });
-}
-
-export async function addCommunityComment(input: { roomId: number | string; accountId: string; authorName: string; body: string; email?: string; staffToken?: string }): Promise<Res<CommunityComment>> {
-  const args = { p_room_id: String(input.roomId), p_account_id: input.accountId, p_author_name: input.authorName, p_body: input.body, p_staff_token: input.staffToken || null };
-  return rpc<CommunityComment>("community_add_comment", args, input.staffToken ? undefined : input.email);
 }
 
 /* ---------- conteúdo global do ADM ---------- */

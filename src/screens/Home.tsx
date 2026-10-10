@@ -370,7 +370,7 @@ export default function HomeScreen({
         <SectionTitle>Ações Rápidas</SectionTitle>
         <div className="grid grid-cols-5 gap-1.5">
           {quick.map((q) => (
-            <button key={q.id} data-guide-id={q.id} onClick={() => onQuick(q.id)} className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border bg-[#1e1e1e] px-1 py-3 transition active:scale-95 ${q.border}`}>
+            <button key={q.id} onClick={() => onQuick(q.id)} className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border bg-[#1e1e1e] px-1 py-3 transition active:scale-95 ${q.border}`}>
               <span className={`grid h-8 w-8 place-items-center rounded-lg ${q.bg} ${q.text}`}><q.icon size={18} /></span>
               <span className="text-center text-[9.5px] font-semibold leading-tight text-neutral-200">{q.label}</span>
             </button>

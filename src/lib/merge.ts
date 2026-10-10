@@ -118,8 +118,23 @@ function fixDeltas(base: AppData, local: AppData, remote: AppData, out: AppData)
 /** Funde os dados da casa. No telemóvel do funcionário, a configuração e a equipa vêm sempre do proprietário. */
 export function mergeData(base: AppData | null, local: AppData, remote: AppData, role: "owner" | "staff"): AppData {
   const m = merge3(base ?? undefined, local, remote) as AppData;
+  const mergeInvoicesByNumber = (...lists: (AppData["invoices"] | undefined)[]) => {
+    const byNumber = new Map<string, NonNullable<AppData["invoices"]>[number]>();
+    for (const list of lists) {
+      for (const invoice of list ?? []) {
+        if (invoice && invoice.number) {
+          const previous = byNumber.get(invoice.number);
+          if (!previous || invoice.ts >= previous.ts) {
+            byNumber.set(invoice.number, invoice);
+          }
+        }
+      }
+    }
+    return [...byNumber.values()].sort((a, b) => b.ts - a.ts);
+  };
   const out: AppData = {
     ...m,
+    invoices: mergeInvoicesByNumber(base?.invoices, local.invoices, remote.invoices),
     lastTick: Math.max(local.lastTick, remote.lastTick),
     notifications: dedupeNotifs(m.notifications ?? []).slice(0, 300),
     activity: (m.activity ?? []).slice(0, 3000),

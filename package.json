@@ -1,7 +1,7 @@
 {
   "name": "react-vite-tailwind",
   "private": true,
-  "version": "5.9.1",
+  "version": "5.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,18 +11,20 @@
     "cap:add:ios": "cap add ios",
     "cap:sync": "npm run build && cap sync && node scripts/patch-native.mjs",
     "cap:android": "npm run cap:sync && cap open android",
-    "cap:ios": "npm run cap:sync && cap open ios",
-    "test": "node scripts/smoke-check.mjs",
-    "test:smoke": "node scripts/smoke-check.mjs"
+    "cap:ios": "npm run cap:sync && cap open ios"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
     "@capacitor/core": "^7.0.0",
+    "@capacitor/filesystem": "^7.1.9",
     "@capacitor/ios": "^7.0.0",
     "@capacitor/local-notifications": "^7.0.7",
+    "@capacitor/share": "^7.0.4",
+    "@types/qrcode": "^1.5.6",
     "clsx": "2.1.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.51.0",
+    "qrcode": "^1.5.4",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tailwind-merge": "3.4.0"

@@ -235,7 +235,7 @@ language plpgsql security definer set search_path = public as $$
 declare
   r public.staff_access%rowtype; h public.houses%rowtype;
   nd jsonb; k text; act jsonb;
-  cols text[] := array['stations','sessions','bookings','players','transactions','notifications','inventory','stockMoves','catalog','history'];
+  cols text[] := array['stations','sessions','bookings','players','transactions','invoices','notifications','inventory','stockMoves','catalog','history'];
 begin
   select * into r from public._staff_ctx(p_token);
   if r.staff_id is null then return jsonb_build_object('ok', false, 'error', 'auth'); end if;

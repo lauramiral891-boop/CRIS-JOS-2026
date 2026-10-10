@@ -162,7 +162,7 @@ export default function FinanceScreen({
       </button>
 
       <div className="rise rise-4 grid grid-cols-2 gap-2.5">
-        <button data-guide-id="reports" onClick={() => onOpenReports("day")} className="neon-border-cyan flex items-center justify-center gap-2 rounded-2xl bg-transparent py-3 text-[13px] font-bold text-[#00E5FF] transition active:scale-95">
+        <button onClick={() => onOpenReports("day")} className="neon-border-cyan flex items-center justify-center gap-2 rounded-2xl bg-transparent py-3 text-[13px] font-bold text-[#00E5FF] transition active:scale-95">
           <ChartColumn size={17} /> Ver Relatórios
         </button>
         <button onClick={() => setShowNew(true)} className="neon-border-cyan flex items-center justify-center gap-2 rounded-2xl bg-transparent py-3 text-[13px] font-bold text-[#00E5FF] transition active:scale-95">

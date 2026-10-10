@@ -3,6 +3,14 @@
   "appName": "CJ Gerenciamento",
   "webDir": "dist",
   "backgroundColor": "#000000",
-  "android": { "allowMixedContent": false },
-  "ios": { "contentInset": "always" }
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "always"
+  },
+  "server": {
+    "url": "https://cris-jos-2026.vercel.app",
+    "cleartext": false
+  }
 }

@@ -37,8 +37,6 @@ export const emptyConfig = (): Config => ({
   pdfFont: "times",
   pdfSize: 11,
   pdfCase: "normal",
-  pdfSignature: "Cristina e José",
-  pdfSupportNote: "Obrigado pela preferência. Em caso de falha, contacte o proprietário.",
   aiKey: "",
 });
 
@@ -49,6 +47,7 @@ export const defaultData = (): AppData => ({
   bookings: [],
   players: [],
   transactions: [],
+  invoices: [],
   notifications: [],
   inventory: [],
   stockMoves: [],
@@ -65,12 +64,13 @@ export function normalize(p: Partial<AppData> | null | undefined): AppData | nul
   return {
     ...base,
     ...p,
-    config: { ...base.config, ...p.config, aiKey: "" },
+    config: { ...base.config, ...p.config },
     stations: p.stations ?? [],
     sessions: p.sessions ?? [],
     bookings: p.bookings ?? [],
     players: p.players ?? [],
     transactions: p.transactions ?? [],
+    invoices: p.invoices ?? [],
     notifications: p.notifications ?? [],
     inventory: p.inventory ?? [],
     stockMoves: p.stockMoves ?? [],
@@ -107,8 +107,7 @@ export function loadData(): AppData | null {
 export function saveData(d: AppData): boolean {
   if (!NS) return false;
   try {
-    const safe = d.config.aiKey ? { ...d, config: { ...d.config, aiKey: "" } } : d;
-    localStorage.setItem(nk("cjg-data"), JSON.stringify(safe));
+    localStorage.setItem(nk("cjg-data"), JSON.stringify(d));
     return true;
   } catch {
     return false;

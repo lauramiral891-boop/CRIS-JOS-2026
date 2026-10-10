@@ -26,6 +26,7 @@ export function useLiveSync(p: Props) {
   const accountId = p.account.id;
   const startedAt = useRef(Date.now() - 30000);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastWarn = useRef("");
 
   const io = useRef<IO>({
     read: () => pr.current.getSnap(),
@@ -40,9 +41,22 @@ export function useLiveSync(p: Props) {
   const run = useCallback(async (): Promise<SyncRes> => {
     const ch = channelFor(getAccount(accountId));
     if (!ch) return { ok: false, reason: "nocloud", error: "" };
+
     const res = await runSync(accountId, ch, io);
-    if (!res.ok && res.reason === "denied") pr.current.onDenied(res.error);
-    if (res.ok && res.warn) pr.current.onWarn(res.warn);
+
+    if (!res.ok && res.reason === "denied") {
+      pr.current.onDenied(res.error);
+    } else if (!res.ok && res.reason === "offline") {
+      const msg = res.error || "A sincronização com a nuvem falhou. Os dados locais permanecem neste dispositivo. Verifica a ligação e tenta novamente.";
+      if (lastWarn.current !== msg) {
+        lastWarn.current = msg;
+        pr.current.onWarn(msg);
+      }
+    } else if (res.ok) {
+      lastWarn.current = "";
+      if (res.warn) pr.current.onWarn(res.warn);
+    }
+
     return res;
   }, [accountId, io]);
 

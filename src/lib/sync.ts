@@ -313,24 +313,36 @@ export function wipeShadow(accountId: string) {
 /** O funcionário sai: envia o que falta, termina a sessão na nuvem e apaga a sala deste telemóvel (se nada ficou por enviar). */
 export async function leaveShadow(accountId: string, io: IO): Promise<void> {
   if (!getAccount(accountId)?.shadow) return;
+
   const t = loadStaffToken(accountId);
   if (!t) return;
-  let synced = false;
+
+  let result: SyncRes | null = null;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
   try {
-    synced = await Promise.race([
-      runSync(accountId, { kind: "staff", token: t.token }, io).then((r) => !!r?.ok),
-      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 4000)),
+    result = await Promise.race([
+      runSync(accountId, { kind: "staff", token: t.token }, io),
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), 8000);
+      }),
     ]);
   } catch {
-    return;
+    result = null;
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
-  if (!synced) return;
-  const base = loadBase(accountId);
-  if (!base || !snapEq(io.read(), base.snap)) return;
-  void staffLogout(t.token);
+
+  const b = loadBase(accountId);
+  const clean = !!b && snapEq(io.read(), b.snap);
+
+  if (!result?.ok || !clean) return;
+
   clearStaffToken(accountId);
+  void staffLogout(t.token);
   wipeShadow(accountId);
 }
+
 /* ---------- conteúdo global do ADM ---------- */
 const getStamp = (k: string) => { try { return localStorage.getItem(k) ?? ""; } catch { return ""; } };
 const setStamp = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* ignora */ } };

@@ -3,7 +3,6 @@ import { ArrowLeft, Bot, Flame, KeyRound, LifeBuoy, MessageCircle, Send, Sparkle
 import type { Config } from "../lib/types";
 import { askOnline, buildSystemPrompt, fallbackAnswer, localAnswer, norm, suggestions, type AiContext } from "../lib/assistant";
 import { getNamespace, uid } from "../lib/storage";
-import { getCloudAccessToken } from "../lib/cloud";
 import { ADM_EVENT, loadGlobalAdm, logUnknown } from "../lib/adm";
 import { BRAND, normalize, welcomeLine } from "../lib/brain";
 import HelpSheet, { ManagerButtons } from "./HelpSheet";
@@ -41,9 +40,7 @@ const loadStore = (): Store => {
 
 function Rich({ text }: { text: string }) {
   const inline = (s: string) =>
-    s.split(/(\[[^\]]+\]\(https?:\/\/[^)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g).map((p, i) => {
-      const link = p.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
-      if (link) return <a key={i} href={link[2]} target="_blank" rel="noreferrer noopener" className="font-semibold text-[#00E5FF] underline">{link[1]}</a>;
+    s.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((p, i) => {
       if (p.startsWith("**") && p.endsWith("**") && p.length > 4) return <b key={i} className="font-bold text-white">{p.slice(2, -2)}</b>;
       if (p.startsWith("*") && p.endsWith("*") && p.length > 2) return <i key={i}>{p.slice(1, -1)}</i>;
       return <span key={i}>{p}</span>;
@@ -63,12 +60,12 @@ function Rich({ text }: { text: string }) {
 }
 
 export default function AssistantView({
-  config, ownerName, ownerEmail, getCtx, onClose,
+  config, ownerName, getCtx, onPatch, onClose,
 }: {
   config: Config;
   ownerName: string;
-  ownerEmail?: string;
   getCtx: () => AiContext;
+  onPatch: (p: Partial<Config>) => void;
   onClose: () => void;
 }) {
   const first = ownerName.trim().split(/\s+/)[0] || "proprietário";
@@ -87,7 +84,8 @@ export default function AssistantView({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [online, setOnline] = useState(() => navigator.onLine);
-  const [showAiInfo, setShowAiInfo] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+  const [keyDraft, setKeyDraft] = useState(config.aiKey);
   const [voiceOn, setVoiceOn] = useState(() => voiceSupported() && voiceEnabled());
   const [speakingId, setSpeakingId] = useState<number | null>(null);
   const voiceRef = useRef(voiceOn);
@@ -189,10 +187,6 @@ export default function AssistantView({
 
     const ctx = getCtx();
     const mem = gRef.current.memories;
-    // Detectar pesquisa antes da memória local: uma resposta local nunca deve
-    // substituir uma pergunta explícita sobre notícias ou informação atual.
-    const normalizedQuestion = norm(q);
-    const useGoogleSearch = /\b(pesquis\w*|procur\w*|google|internet|fontes?|noticias?|hoje|agora|atual\w*|recent\w*|preco atual|lancament\w*|ultim\w*)\b/i.test(normalizedQuestion);
     const local = localAnswer(q, ctx, mem);
     if (!local) logUnknown(q);
     const wantsHuman = /gerente|pessoa real|atendimento humano|falar com (alguem|uma pessoa|humano)|suporte/.test(normalize(q));
@@ -203,7 +197,7 @@ export default function AssistantView({
     const done = (text: string, source: NonNullable<Msg["source"]>, extra?: Partial<Msg>) => patch(text, { streaming: false, source, help, topic: q, ...extra });
 
     try {
-      if (local?.exact && !useGoogleSearch) {
+      if (local?.exact) {
         const txt = friendly(local.text);
         await typeOut(txt, (t) => patch(t));
         done(txt, local.kind === "data" ? "data" : "memory");
@@ -213,37 +207,16 @@ export default function AssistantView({
         const ctrl = new AbortController();
         abortRef.current = ctrl;
         let acc = "";
-        const proxyUrl = (import.meta.env.VITE_GEMINI_PROXY_URL ?? "").trim();
-        const accessToken = proxyUrl && ownerEmail ? await getCloudAccessToken(ownerEmail) : null;
-        // Para pesquisa externa, não enviar o contexto financeiro/administrativo da casa.
-        const systemPrompt = buildSystemPrompt(ctx, q, mem, !useGoogleSearch);
-        // Não enviar histórico anterior numa pesquisa externa: pode conter números privados.
-        const requestHistory = useGoogleSearch ? [{ role: "user" as const, content: q }] : history;
-        await askOnline(requestHistory, systemPrompt, "", (d) => { acc += d; patch(acc); }, ctrl.signal, 14000, {
-          proxyUrl: proxyUrl || undefined, accessToken, useGoogleSearch,
-        });
+        await askOnline(history, buildSystemPrompt(ctx, q, mem), config.aiKey, (d) => { acc += d; patch(acc); }, ctrl.signal);
         done(acc, "online");
         if (voiceRef.current && aliveRef.current) say(aid, acc);
       }
     } catch {
       if (!aliveRef.current) return;
-      // Nunca disfarçar uma falha de pesquisa com conselhos locais sem relação.
-      if (useGoogleSearch) {
-        const text = navigator.onLine
-          ? "Não consegui concluir a pesquisa nem confirmar fontes verificáveis neste momento. Não vou inventar notícias ou links. Tenta novamente dentro de instantes."
-          : "Estás sem internet. Não consigo pesquisar notícias atuais nem confirmar fontes offline. Liga-te à internet e tenta novamente.";
-        await typeOut(text, (t) => patch(t));
-        done(text, "local", { help: true });
-        if (voiceRef.current && aliveRef.current) say(aid, text);
-      } else {
-        const note = navigator.onLine
-          ? "\n\nA IA online não está disponível agora; esta resposta é local e pode não incluir informação recente."
-          : "\n\nSem internet: esta é uma orientação local e não inclui pesquisa atual.";
-        const text = friendly((local?.text ?? fallbackAnswer(ctx)) + note);
-        await typeOut(text, (t) => patch(t));
-        done(text, local?.kind === "memory" ? "memory" : "local", { help: help || !local });
-        if (voiceRef.current && aliveRef.current) say(aid, text);
-      }
+      const text = friendly(local?.text ?? fallbackAnswer(ctx));
+      await typeOut(text, (t) => patch(t));
+      done(text, local?.kind === "memory" ? "memory" : "local", { help: help || !local });
+      if (voiceRef.current && aliveRef.current) say(aid, text);
     } finally {
       if (aliveRef.current) setBusy(false);
     }
@@ -272,7 +245,7 @@ export default function AssistantView({
           </p>
         </div>
         <button onClick={() => setHelpOpen(true)} className="grid h-9 w-9 place-items-center rounded-full bg-[#25D366]/15 text-[#25D366]" aria-label="Ajuda e gerentes"><LifeBuoy size={16} /></button>
-        <button onClick={() => setShowAiInfo(!showAiInfo)} className={cn("grid h-9 w-9 place-items-center rounded-full", showAiInfo ? "bg-[#00FF88]/15 text-[#00FF88]" : "bg-white/10 text-neutral-300")} aria-label="Estado do serviço de IA"><KeyRound size={15} /></button>
+        <button onClick={() => setShowKey(!showKey)} className={cn("grid h-9 w-9 place-items-center rounded-full", showKey || config.aiKey ? "bg-[#FFC107]/15 text-[#FFC107]" : "bg-white/10 text-neutral-300")} aria-label="Chave de IA"><KeyRound size={15} /></button>
         {voiceSupported() && (
           <button onClick={toggleVoice} className={cn("grid h-9 w-9 place-items-center rounded-full", voiceOn ? "bg-[#00FF88]/15 text-[#00FF88]" : "bg-white/10 text-neutral-400")} aria-label={voiceOn ? "Desligar a voz" : "Ligar a voz"}>
             {voiceOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
@@ -281,9 +254,13 @@ export default function AssistantView({
         {!empty && <button onClick={clear} className="grid h-9 w-9 place-items-center rounded-full bg-[#FF4D6D]/10 text-[#FF4D6D]" aria-label="Limpar conversa"><Trash2 size={15} /></button>}
       </div>
 
-      {showAiInfo && (
+      {showKey && (
         <div className="fade border-b border-white/[0.07] bg-[#171717] px-4 py-3">
-          <p className="text-[11.5px] leading-relaxed text-neutral-300">A chave Gemini fica no servidor Supabase, nunca no navegador, no GitHub ou no APK. Quando <b>VITE_GEMINI_PROXY_URL</b> estiver configurado e a conta online autenticada, a IA pode pesquisar na Google e apresentar fontes. Sem esse serviço ou sem internet, a aplicação usa as explicações locais e não envia dados financeiros para serviços externos alternativos.</p>
+          <p className="text-[11.5px] leading-relaxed text-neutral-400">Opcional: ligue a sua chave da OpenAI para respostas ainda mais fiáveis. Fica guardada só neste telemóvel.</p>
+          <div className="mt-2 flex gap-2">
+            <input type="password" value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} placeholder="sk-..." className="w-full rounded-xl border border-white/10 bg-[#252525] px-3 py-2 text-[13px] outline-none focus:border-[#FFC107]" />
+            <button onClick={() => { onPatch({ aiKey: keyDraft.trim() }); setShowKey(false); }} className="shrink-0 rounded-xl bg-[#FFC107] px-4 text-[12px] font-extrabold uppercase text-black">Guardar</button>
+          </div>
         </div>
       )}
 

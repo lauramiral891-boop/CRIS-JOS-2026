@@ -1,11 +1,7 @@
 import type { Billing, Payment } from "./types";
-import { sha256Hex } from "./auth";
 import { uid } from "./storage";
 
 export const DAY = 24 * 3600 * 1000;
-
-/** Segredo partilhado para validar códigos de ativação offline. MUDE antes de publicar (VITE_LICENSE_SECRET). */
-const SECRET: string = (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_LICENSE_SECRET ?? "levelup-mude-este-segredo";
 
 export type BillStatus = "off" | "ok" | "soon" | "overdue" | "blocked";
 
@@ -50,22 +46,3 @@ export const rejectPayment = (b: Billing, paymentId: number, now: number): Billi
 export const newPayment = (amount: number, method: string, ref: string, status: Payment["status"] = "pending"): Payment => ({
   id: uid(), ts: Date.now(), amount, method, ref, status, decidedAt: status === "pending" ? undefined : Date.now(),
 });
-
-/* ---------- códigos de ativação (funcionam sem internet) ---------- */
-const sig = (houseId: string, days: number) => sha256Hex(`${SECRET}|${houseId}|${days}`).slice(0, 8).toUpperCase();
-
-/** O ADM gera um código para uma casa (ID dela) com acesso até `until`. */
-export function makeCode(houseId: string, until: number): string {
-  const days = Math.floor(until / DAY);
-  return `PAG-${days.toString(36).toUpperCase()}-${sig(houseId.trim().toUpperCase(), days)}`;
-}
-
-/** Devolve o fim do acesso se o código for válido para esta casa, senão null. */
-export function readCode(code: string, houseId: string, now: number): number | null {
-  const m = code.trim().toUpperCase().match(/^PAG-([0-9A-Z]+)-([0-9A-F]{8})$/);
-  if (!m) return null;
-  const days = parseInt(m[1], 36);
-  if (!Number.isFinite(days) || sig(houseId.trim().toUpperCase(), days) !== m[2]) return null;
-  const until = days * DAY + DAY - 1;
-  return until > now ? until : null;
-}

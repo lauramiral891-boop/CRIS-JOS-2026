@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Home, CalendarDays, Users, Wallet, Settings as SettingsIcon, X, CheckCircle2,
-  Sparkles, Zap, Bell, Trash2, Bot, CircleHelp,
+  Sparkles, Zap, Bell, Trash2, Bot,
 } from "lucide-react";
 import { TopHeader } from "./components/shared";
 import StartSessionModal from "./components/StartSessionModal";
@@ -14,7 +14,6 @@ import GamesRoom from "./components/GamesRoom";
 import SalesView, { type CartLine } from "./components/SalesView";
 import AssistantView from "./components/AssistantView";
 import PdfShareSheet from "./components/PdfShareSheet";
-import OnboardingGuide from "./components/OnboardingGuide";
 import MyCashCard, { todaysOf } from "./components/MyCashCard";
 import StaffManager, { type NewStaff } from "./components/StaffManager";
 import ActivityView from "./components/ActivityView";
@@ -30,7 +29,7 @@ import FinanceScreen from "./screens/Finance";
 import SettingsScreen from "./screens/Settings";
 import type {
   ActivitySeverity, AdminData, Ad, GlobalAdm, Room, AppData, AppNotification, BookingStatus, Config, Perm, Plan, SaleItem, Session, SessionRecord,
-  Staff, StationStatus, StockMove, StockReason, Tone, TxCategory,
+  Staff, Invoice, StationStatus, StockMove, StockReason, Tone, TxCategory,
 } from "./lib/types";
 import {
   clearData, defaultData, downloadFile, loadAdmin, loadData, normalize, saveAdmin, saveData, uid, type Auth,
@@ -44,12 +43,12 @@ import { fmtTime, fullDate } from "./lib/pdf";
 import type { AiContext } from "./lib/assistant";
 import { startAlarm, stopAlarm, unlockAudio } from "./utils/alarm";
 import { ADM_EVENT, loadGlobalAdm, loadSeenNotices, saveGlobalAdm, saveSeenNotices } from "./lib/adm";
-import { billInfo, newPayment, readCode } from "./lib/billing";
-import { inviteFree } from "./lib/cloud";
-import { channelFor, wipeShadow, loadStaffToken, type Snap } from "./lib/sync";
+import { billInfo, newPayment } from "./lib/billing";
+import { inviteFree, licenseRequest } from "./lib/cloud";
+import { channelFor, wipeShadow, type Snap } from "./lib/sync";
 import { useLiveSync } from "./lib/useLiveSync";
 import { merge3, mergeData } from "./lib/merge";
-import { askNotifPermission, notifPermission, syncAlarms, systemNotify } from "./lib/push";
+import { askNotifPermission, notifPermission, syncAlarms, systemNotify, updateMachineCountdown } from "./lib/push";
 import { cn } from "./utils/cn";
 
 type Tab = "home" | "bookings" | "players" | "finances" | "settings";
@@ -84,11 +83,7 @@ interface WorkspaceProps {
 }
 
 export default function Workspace({ account, session, fresh, onExit, onAccountPatch }: WorkspaceProps) {
-  const [data, setData] = useState<AppData>(() => {
-    const loaded = loadData() ?? defaultData();
-    // Chaves antigas guardadas no browser não são reutilizadas: a IA online usa o proxy seguro.
-    return loaded.config.aiKey ? { ...loaded, config: { ...loaded.config, aiKey: "" } } : loaded;
-  });
+  const [data, setData] = useState<AppData>(() => loadData() ?? defaultData());
   const dataRef = useRef(data);
   dataRef.current = data;
   const { config, stations, sessions, bookings, players, transactions, notifications, inventory, catalog, staff } = data;
@@ -117,8 +112,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   const [showGoal, setShowGoal] = useState(false);
   const [showSales, setShowSales] = useState(false);
   const [showAI, setShowAI] = useState(false);
-  const [guideTrigger, setGuideTrigger] = useState(0);
-  const [pdfSheet, setPdfSheet] = useState<{ open: boolean; report: Report | null; own?: boolean; txs?: typeof transactions }>({ open: false, report: null });
+  const [pdfSheet, setPdfSheet] = useState<{ open: boolean; report: Report | null; own?: boolean }>({ open: false, report: null });
   const [reports, setReports] = useState<{ open: boolean; kind: ReportTab }>({ open: false, kind: "day" });
   const [startModal, setStartModal] = useState<{ open: boolean; stationId: number | null }>({ open: false, stationId: null });
   const [manager, setManager] = useState<{ open: boolean; stationId: number | null }>({ open: false, stationId: null });
@@ -229,7 +223,6 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   useEffect(() => { setStorageFull(!saveData(data)); }, [data]);
   useEffect(() => { saveAdmin(admin); }, [admin]);
 
-
   /* Anúncios, salas e avisos do ADM: atualizam sozinhos quando o ADM altera algo neste telemóvel */
   useEffect(() => {
     const pull = () => setGadm(loadGlobalAdm());
@@ -312,14 +305,14 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", config.theme === "light" ? "#f3f6fa" : "#0a0a0a");
   }, [config.theme, config.lang]);
 
-  /* Alarme apenas na reta final: dispara uma vez quando faltam 15 segundos. */
+  /* Fim do tempo → alarme */
   useEffect(() => {
-    const due = sessions.filter((s) => s.kind === "timed" && !s.alarmFired && now >= s.startedAt + Math.max(0, s.durationSec - 15) * 1000);
+    const due = sessions.filter((s) => s.kind === "timed" && !s.alarmFired && now >= s.startedAt + s.durationSec * 1000);
     if (due.length === 0) return;
     const ids = due.map((d) => d.id);
     setData((d) => ({ ...d, sessions: d.sessions.map((s) => (ids.includes(s.id) ? { ...s, alarmFired: true } : s)) }));
     setRinging((prev) => [...prev, ...ids.filter((i) => !prev.includes(i))]);
-    due.forEach((s) => notify("⚠️ Faltam 15 segundos!", `${stationName(s.stationId)} • ${s.player} • ${s.plan} está quase a terminar.`, "red", { noLog: true }));
+    due.forEach((s) => notify("Tempo esgotado!", `${stationName(s.stationId)} • ${s.player} (${s.plan})`, "red", { noLog: true }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now, sessions]);
 
@@ -374,10 +367,25 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     void syncAlarms(
       dataRef.current.sessions
         .filter((s) => s.kind === "timed" && !s.alarmFired)
-        .map((s) => ({ id: s.id, at: s.startedAt + Math.max(0, s.durationSec - 15) * 1000, title: "⚠️ Faltam 15 segundos!", body: `${stationName(s.stationId)} • ${s.player} • prepare-se para terminar a sessão.` }))
+        .map((s) => ({ id: s.id, at: s.startedAt + s.durationSec * 1000, title: "Tempo esgotado!", body: `${stationName(s.stationId)} • ${s.player} (${s.plan})` }))
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alarmSig, config.notifOn, notifGranted]);
+
+  /* Notificação persistente: usa o mesmo relógio das máquinas */
+  useEffect(() => {
+    if (!config.notifOn || notifPermission() !== "granted") return;
+    const active = dataRef.current.sessions
+      .filter((s) => s.kind === "timed" && !s.alarmFired)
+      .map((s) => ({
+        id: s.id,
+        station: stationName(s.stationId),
+        player: s.player,
+        remainingSec: s.durationSec - (now - s.startedAt) / 1000,
+      }))
+      .filter((s) => s.remainingSec > 0);
+    void updateMachineCountdown(active);
+  }, [now, config.notifOn, notifGranted]);
 
   useEffect(() => {
     const h = () => unlockAudio();
@@ -418,14 +426,6 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   /* ---------- configuração inicial ---------- */
   const finishSetup = (r: SetupResult) => {
     const t = Date.now();
-    const currentBill = adminRef.current.billing;
-    if (!currentBill.trialStartedAt && !currentBill.enabled && currentBill.dueAt == null && !currentBill.manualBlock) {
-      setAdmin((a) => ({ ...a, billing: {
-        ...a.billing, enabled: true, amount: 3000, periodDays: 30, dueAt: t + 7 * 24 * 60 * 60 * 1000,
-        graceDays: 0, warnDays: 3, trialStartedAt: t,
-        instructions: a.billing.instructions || "Pagamento: 3000 Kz. Envie o comprovativo pelo WhatsApp 945 379 003. O ADM confirma e libera o acesso.",
-      } }));
-    }
     setData((d) => ({
       ...d,
       config: {
@@ -684,13 +684,6 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   const checkoutSale = (lines: CartLine[], method: string, customer: string) => {
     let total = 0;
     const stockUse = new Map<number, number>();
-    lines.forEach((line) => { if (line.invId) stockUse.set(line.invId, (stockUse.get(line.invId) ?? 0) + line.qty); });
-    const insufficient = [...stockUse.entries()].map(([invId, qty]) => ({ item: dataRef.current.inventory.find((i) => i.id === invId), qty })).find((x) => x.item && x.item.stock < x.qty);
-    if (insufficient?.item) {
-      toast("Stock insuficiente", `${insufficient.item.name}: há ${insufficient.item.stock} ${insufficient.item.unit ?? "un"}, mas pediu ${insufficient.qty}. Reponha o stock antes de concluir.`, "red");
-      return;
-    }
-    stockUse.clear();
     lines.forEach((l) => {
       const amount = Math.round(l.unitPrice * l.qty * 100) / 100;
       total += amount;
@@ -703,6 +696,30 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
       if (l.invId) stockUse.set(l.invId, (stockUse.get(l.invId) ?? 0) + l.qty);
     });
     stockUse.forEach((qty, invId) => { stockMove(invId, "out", "venda", qty, { note: `Venda${customer ? ` • ${customer}` : ""}`, quiet: true }); });
+
+    // Guardar a fatura separadamente, sem duplicar a receita.
+    const invoiceTs = Date.now();
+    const invoiceNumber = `CJ-${invoiceTs}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const invoice: Invoice = {
+      id: invoiceTs,
+      number: invoiceNumber,
+      ts: invoiceTs,
+      customer: customer || "Cliente geral",
+      method,
+      actorId: actorRef.current.id,
+      actorName: actorRef.current.name,
+      lines: lines.map((l) => ({
+        name: l.name,
+        kind: l.kind,
+        qty: l.qty,
+        unitPrice: l.unitPrice,
+        total: Math.round(l.unitPrice * l.qty * 100) / 100,
+        invId: l.invId,
+      })),
+      total: Math.round(total * 100) / 100,
+    };
+    setData((d) => ({ ...d, invoices: [invoice, ...(d.invoices ?? [])] }));
+
     notify("Venda concluída", `${lines.length} item(ns) • ${formatAOA(total)} • ${method}${actorRef.current.role === "staff" ? ` • por ${actorRef.current.name}` : ""}`, "green");
   };
 
@@ -751,11 +768,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   };
 
   /* ---------- PDF ---------- */
-  const reportTransactions = isOwner || can("finance") ? transactions : transactions.filter((t) => t.actorId === actor.id);
-  const openPdf = (report: Report) => setPdfSheet({
-    open: true, report,
-    txs: isOwner || can("finance") ? transactions : transactions.filter((t) => t.actorId === actor.id),
-  });
+  const openPdf = (report: Report) => setPdfSheet({ open: true, report });
   /** Funcionário: relatório PDF só com o que ele registou hoje */
   const myToday = !isOwner && me ? todaysOf(transactions, me.id, now) : [];
   const openMyCash = () =>
@@ -904,9 +917,15 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     toast("Pagamento enviado", "Aguarde a confirmação do ADM.", "cyan");
   };
 
-  const redeemCode = (code: string) => {
-    const until = readCode(code, adminRef.current.houseId, Date.now());
-    if (!until) return false;
+  const redeemCode = async (code: string): Promise<boolean> => {
+    const r = await licenseRequest("redeem", {
+      houseId: adminRef.current.houseId.trim().toUpperCase(),
+      code: code.trim().toUpperCase(),
+    });
+    if (!r.ok || r.data.valid !== true || typeof r.data.until !== "number") {
+      return false;
+    }
+    const until = r.data.until;
     setAdmin((a) => ({ ...a, billing: { ...a.billing, enabled: true, manualBlock: false, dueAt: until, payments: [newPayment(a.billing.amount, "Código de ativação", code.trim().toUpperCase(), "confirmed"), ...a.billing.payments] } }));
     logAct("cobranca", "Acesso ativado por código", undefined, "warn");
     toast("Acesso ativado", `Válido até ${new Date(until).toLocaleDateString("pt-PT")}.`, "green");
@@ -988,7 +1007,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
           ) : (
             <>
               <TopHeader userName={isOwner ? config.ownerName : actor.name} houseName={account.houseName} photo={account.photo} onBell={openNotif} notifCount={unread} />
-              <BillBanner info={bill} trialDaysLeft={admin.billing.trialStartedAt && admin.billing.dueAt != null && now < admin.billing.dueAt ? Math.ceil((admin.billing.dueAt - now) / (24 * 3600 * 1000)) : null} />
+              <BillBanner info={bill} />
               {notifAsk && config.notifOn && notifPermission() === "default" && <NotifPrompt onAllow={allowNotif} onLater={() => setNotifAsk(false)} />}
               <RoomChips rooms={gadm.rooms.filter((r) => r.active)} onOpen={setRoom} gamesCount={gadm.games.filter((x) => x.active).length} onGames={() => setShowGames(true)} />
               {storageFull && (
@@ -1055,11 +1074,6 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
               </div>
 
               {/* Botão flutuante do assistente IA */}
-              <button
-                onClick={() => setGuideTrigger((v) => v + 1)}
-                aria-label="Ajuda e tutoriais"
-                className="absolute bottom-[108px] left-3 z-30 grid h-11 w-11 place-items-center rounded-full border border-[#00FF88]/35 bg-[#171d19] text-[#00FF88] shadow-[0_0_18px_rgba(0,255,136,0.18)] transition active:scale-90"
-              ><CircleHelp size={21} /></button>
               {isOwner && <button
                 onClick={() => setShowAI(true)}
                 aria-label="Assistente IA"
@@ -1069,7 +1083,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                 <Bot size={23} className="relative" />
               </button>}
 
-              {tab === "home" && activeAds.length > 0 && <div className="relative pt-2"><AdBanner ads={activeAds} slideSec={gadm.slideSec} onView={adView} onClick={adClick} /></div>}
+              {activeAds.length > 0 && <div className="relative pt-2"><AdBanner ads={activeAds} slideSec={gadm.slideSec} onView={adView} onClick={adClick} /></div>}
 
               <nav className="relative border-t border-white/[0.08] bg-[#0e0e0e]/95 px-2 pt-2 backdrop-blur" style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom, 0px))" }}>
                 <div className="absolute -top-[1.5px] left-0 h-[2px] w-full bg-gradient-to-r from-transparent via-[#00E5FF]/60 to-transparent" />
@@ -1077,7 +1091,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                   {visibleTabs.map((t) => {
                     const active = tab === t.id;
                     return (
-                      <button key={t.id} data-guide-id={t.id} onClick={() => setTab(t.id)} className="group flex flex-col items-center gap-1 py-1.5 transition active:scale-95">
+                      <button key={t.id} onClick={() => setTab(t.id)} className="group flex flex-col items-center gap-1 py-1.5 transition active:scale-95">
                         <span className={cn("relative grid h-7 w-12 place-items-center rounded-full transition-all", active && (t.id === "home" ? "bg-[#00FF88]/15" : "bg-[#00E5FF]/12"))}>
                           <t.icon
                             size={20}
@@ -1147,7 +1161,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
               {reports.open && (
                 <ReportsView
-                  key={reports.kind} transactions={reportTransactions} now={now} lang={config.lang} initial={reports.kind}
+                  key={reports.kind} transactions={transactions} now={now} lang={config.lang} initial={reports.kind}
                   onSendPdf={g("pdf", openPdf)}
                   onClose={() => setReports({ open: false, kind: "day" })}
                 />
@@ -1155,7 +1169,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
               {showSales && (
                 <SalesView
-                  catalog={catalog} inventory={inventory} transactions={transactions} now={now}
+                  catalog={catalog} inventory={inventory} transactions={transactions} invoices={data.invoices ?? []} houseName={config.houseName} now={now}
                   onAddItem={g("catalog", addCatalogItem)}
                   onRemoveItem={g("owner", ask(() => "Apagar este item do catálogo?", removeCatalogItem))}
                   onUpdatePrice={g("catalog", updateCatalogPrice)}
@@ -1165,7 +1179,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
               )}
 
               {showAI && isOwner && (
-                <AssistantView config={config} ownerName={config.ownerName} ownerEmail={account.kind === "email" ? account.login : undefined} getCtx={getAiCtx} onClose={() => setShowAI(false)} />
+                <AssistantView config={config} ownerName={config.ownerName} getCtx={getAiCtx} onPatch={patchConfig} onClose={() => setShowAI(false)} />
               )}
 
               {showInventory && (
@@ -1183,8 +1197,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
               {pdfSheet.open && (
                 <PdfShareSheet
-                  config={config} report={pdfSheet.report} txs={pdfSheet.own ? myToday : (pdfSheet.txs ?? transactions)}
-                  machineHistory={isOwner ? data.history : []}
+                  config={config} report={pdfSheet.report} txs={pdfSheet.own ? myToday : transactions}
                   staffName={!isOwner ? actor.name : undefined} ownCash={pdfSheet.own}
                   onPatch={patchConfig} notify={notify} toast={toast}
                   onClose={() => setPdfSheet({ open: false, report: null })}
@@ -1219,11 +1232,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
             </>
           )}
 
-          <OnboardingGuide
-            userKey={`${account.id}:${session.role}:${session.role === "staff" ? session.staffId : "owner"}`}
-            tab={tab} onNavigate={(nextTab) => setTab(nextTab)} isOwner={isOwner} room={room} openTrigger={guideTrigger}
-          />
-          {room && <RoomView room={room} onClose={() => setRoom(null)} accountId={account.id} authorName={isOwner ? config.ownerName : actor.name} accountEmail={isOwner && account.kind === "email" ? account.login : undefined} staffToken={session.role === "staff" ? loadStaffToken(account.id)?.token : undefined} />}
+          {room && <RoomView room={room} onClose={() => setRoom(null)} />}
           {showGames && <GamesRoom games={gadm.games.filter((x) => x.active)} onClose={() => setShowGames(false)} />}
 
           <div className="pointer-events-none absolute inset-x-4 bottom-28 z-[80] flex flex-col gap-2">

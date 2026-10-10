@@ -3,8 +3,9 @@ import {
   ArrowLeft, Check, Minus, Package, Pencil, Plus, Receipt, ShoppingCart, Trash2, Wrench, X,
 } from "lucide-react";
 import Sheet from "./Sheet";
+import InvoiceHistory from "./InvoiceHistory";
 import { ErrorBox, fieldCls, labelCls } from "./ui";
-import type { InventoryItem, SaleItem, SaleKind, Transaction } from "../lib/types";
+import type { InventoryItem, Invoice, SaleItem, SaleKind, Transaction } from "../lib/types";
 import { clockHM, formatAOA, formatAOAshort } from "../lib/format";
 import { addDays, sod } from "../lib/dates";
 import { cn } from "../utils/cn";
@@ -22,6 +23,8 @@ interface Props {
   catalog: SaleItem[];
   inventory: InventoryItem[];
   transactions: Transaction[];
+  invoices: Invoice[];
+  houseName: string;
   now: number;
   onAddItem: (i: Omit<SaleItem, "id">) => void;
   onRemoveItem: (id: number) => void;
@@ -59,10 +62,10 @@ const suggestions: { n: string; k: SaleKind }[] = [
 const methods = ["Dinheiro", "Multicaixa", "Transferência"];
 
 export default function SalesView({
-  catalog, inventory, transactions, now, onAddItem, onRemoveItem, onUpdatePrice, onCheckout, onClose,
+  catalog, inventory, transactions, invoices, houseName, now, onAddItem, onRemoveItem, onUpdatePrice, onCheckout, onClose,
   canManage = true, canRemove = true, onlyActorId = null,
 }: Props) {
-  const [tab, setTab] = useState<"vender" | "hoje">("vender");
+  const [tab, setTab] = useState<"vender" | "hoje" | "faturas">("vender");
   const [kind, setKind] = useState<SaleKind>("produto");
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
@@ -145,8 +148,8 @@ export default function SalesView({
         <span className="grid h-9 w-9 place-items-center rounded-full bg-[#00FF88]/10 text-[#00FF88]"><ShoppingCart size={17} /></span>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 px-4 py-3">
-        {([["vender", "Vender"], ["hoje", `${onlyActorId === null ? "Vendas de hoje" : "As minhas vendas"} (${sales.length})`]] as const).map(([id, l]) => (
+      <div className="grid grid-cols-3 gap-1.5 px-4 py-3">
+        {([["vender", "Vender"], ["hoje", `${onlyActorId === null ? "Vendas de hoje" : "As minhas vendas"} (${sales.length})`], ["faturas", "Faturas"]] as const).map(([id, l]) => (
           <button key={id} onClick={() => setTab(id)} className={cn("rounded-xl border py-2 text-[12px] font-extrabold uppercase tracking-wider transition active:scale-95", tab === id ? "border-[#00E5FF] bg-[#00E5FF] text-black shadow-[0_0_14px_rgba(0,229,255,0.4)]" : "border-white/10 bg-[#1e1e1e] text-neutral-400")}>{l}</button>
         ))}
       </div>
@@ -305,6 +308,7 @@ export default function SalesView({
             </div>
           </>
         )}
+      {tab === "faturas" && <InvoiceHistory invoices={invoices ?? []} onlyActorId={onlyActorId} houseName={houseName} />}
       </div>
 
       {cart.length > 0 && (

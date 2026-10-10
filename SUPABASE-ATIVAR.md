@@ -17,7 +17,7 @@ Sem estas variáveis a app continua a funcionar em modo local (como antes). Com 
 - `VITE_SUPABASE_URL` = o Project URL
 - `VITE_SUPABASE_ANON_KEY` = a chave «anon» (eyJ…) ou a nova «publishable» (sb_publishable_…)
 - `VITE_ADM_EMAIL` = tvvibeoficial@gmail.com
-- Não configure `VITE_LICENSE_SECRET`: variáveis `VITE_` são públicas no frontend. Os códigos de ativação offline ainda usam mecanismo legado e não protegem cobranças comerciais contra adulteração; é necessária validação no servidor.
+- `VITE_LICENSE_SECRET` = uma frase longa secreta
 Depois **Redeploy**.
 
 ## 3. Primeira vez
@@ -41,32 +41,3 @@ Depois **Redeploy**.
 - O alarme «tempo esgotado» toca em todos os telemóveis com a sala aberta.
 - Conta com telefone (sem email) continua só local.
 - Notificações com a app fechada vindas de outros telemóveis: precisam de Firebase (FCM), é o passo seguinte. Com a app aberta (ou em segundo plano recente) o aviso aparece em segundos.
-
-## Migração adicional: IDs, auditoria de acessos e comentários das comunidades
-
-Para a Sala do ADM conseguir consultar acessos feitos em vários telemóveis e para as comunidades guardarem comentários na nuvem, execute o ficheiro `supabase/access-audit.sql` no SQL Editor do mesmo projeto Supabase. É uma migração aditiva: cria tabelas e funções novas, sem apagar as tabelas de casas, funcionários ou dados existentes.
-
-Depois de executar a migração, publique uma nova versão do frontend. A aba **Sala do ADM → IDs / acessos** mostra até 500 acessos recentes, além dos IDs guardados localmente. Se a migração ainda não foi aplicada, a aba avisa que o histórico global não está disponível.
-
-**Gemini:** a chave é introduzida pelo próprio proprietário no Assistente IA. Não coloque a chave em `VITE_*`, no GitHub ou no APK; uma chave compilada num frontend pode ser extraída. Como a chave anteriormente partilhada ficou exposta, revogue-a e crie uma nova antes de voltar a utilizar a IA.
-
-## Gemini com pesquisa Google (modo seguro)
-
-A chave Gemini partilhada anteriormente deve ser revogada no Google AI Studio e substituída. **Nunca a coloques no GitHub, no `.env` com prefixo `VITE_`, no APK nem no código React.**
-
-O projeto inclui a função `supabase/functions/cj-gemini/index.ts`. Ela valida a sessão Supabase do utilizador, mantém a chave Gemini no servidor e ativa o grounding com Google Search quando a pergunta pede informação atual, pesquisa ou fontes. A IA é apenas de consulta: não recebe ferramentas para alterar vendas, saldos, funcionários ou definições.
-
-1. No painel do Supabase, abre **Project Settings → Edge Functions** ou usa a CLI no computador/Termux autenticado.
-2. Define o segredo no projeto: `supabase secrets set GEMINI_API_KEY=CHAVE_NOVA`.
-3. Publica a função: `supabase functions deploy cj-gemini`.
-4. Nas variáveis de ambiente da Vercel/Netlify, define `VITE_GEMINI_PROXY_URL` com o endereço real da função, por exemplo `https://TEU-PROJETO.supabase.co/functions/v1/cj-gemini`.
-5. Mantém `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` configuradas como já estão no projeto. Não inventes uma service-role key no frontend.
-6. Reconstrói e publica a aplicação. A pesquisa Google pode gerar custos/quota na conta Google conforme o modelo e o plano.
-
-A função exige um token válido de utilizador Supabase. Contas apenas locais ou sem sessão online continuam a poder usar as respostas e tutoriais locais, mas não conseguem usar o proxy seguro até entrarem numa conta online autenticada.
-
-## Identidade dos relatórios PDF
-
-O PDF é criado com `jsPDF` no dispositivo. A pré-visualização e o download validam o tipo `application/pdf` e um tamanho mínimo antes de apresentar a operação como preparada. O logótipo é carregado de `public/logo.png`; se o ficheiro não estiver acessível, o relatório continua a poder ser gerado sem imagem. O proprietário pode editar a assinatura e a mensagem de suporte no painel de PDF. O nome do proprietário, telefone e email usam os dados configurados na conta.
-
-A partilha usa a Web Share API quando o navegador/WebView suporta anexos de ficheiros. Se não suportar, o PDF é descarregado e o WhatsApp abre com uma mensagem; nesse caminho, o utilizador deve anexar manualmente o PDF em **📎 → Documento**. A seleção de contacto e o envio final são confirmados pelo próprio utilizador no WhatsApp.

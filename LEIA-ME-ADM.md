@@ -8,7 +8,7 @@
 - **Salas**: modelos prontos (Torneio, Preços, Regras, Contacto, Em branco) e editor por blocos — texto, tabela de preços, horários, regras, botão (WhatsApp / ligar / link), galeria de fotos e inscrição (abre o WhatsApp com a mensagem pronta). Cada sala tem cor, emoji, capa e frase.
 - **IA**: escreva o pedido, confira a lista e toque em «Aplicar». Nada muda sem confirmação.
 - **Cobrança**: valor/dias/tolerância e texto «Como pagar». Sem pagamento aparece o ecrã de bloqueio; os dados ficam guardados.
-- **Código de ativação (legado)**: a assinatura atual é feita no frontend e NÃO é segura para proteger cobranças comerciais. Não coloque segredos em variáveis `VITE_`; a geração e validação precisam de um endpoint de servidor antes de usar a cobrança como proteção real.
+- **Código de ativação**: mude o segredo antes de publicar — crie `.env` com `VITE_LICENSE_SECRET=uma-frase-longa-e-secreta` e faça `npm run build`.
 
 ## Limites desta versão (tudo guardado no próprio telemóvel)
 1. Anúncios, fotos, salas e avisos ficam guardados **no telemóvel onde o ADM os criou**. Para aparecerem em **todos** os telemóveis (e para ver/bloquear várias casas à distância, confirmar pagamentos e enviar push com a app fechada) é preciso **servidor** — o `sw.js` já está preparado para push.

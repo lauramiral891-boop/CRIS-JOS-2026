@@ -163,9 +163,6 @@ export interface Config {
   pdfFont: PdfFontKey;
   pdfSize: number;
   pdfCase: PdfCaseKey;
-  /** Assinatura e mensagem editáveis impressas nos relatórios. */
-  pdfSignature?: string;
-  pdfSupportNote?: string;
   // Assistente IA (chave opcional)
   aiKey: string;
 }
@@ -218,6 +215,27 @@ export interface SessionRecord {
   endedBy: string;
 }
 
+export interface InvoiceLine {
+name: string;
+kind: SaleKind;
+qty: number;
+unitPrice: number;
+total: number;
+invId?: number;
+}
+
+export interface Invoice {
+id: number;
+number: string;
+ts: number;
+customer: string;
+method: string;
+actorId: string;
+actorName: string;
+lines: InvoiceLine[];
+total: number;
+}
+
 export interface AppData {
   config: Config;
   stations: Station[];
@@ -225,6 +243,7 @@ export interface AppData {
   bookings: Booking[];
   players: Player[];
   transactions: Transaction[];
+  invoices: Invoice[];
   notifications: AppNotification[];
   inventory: InventoryItem[];
   stockMoves: StockMove[];
@@ -251,7 +270,6 @@ export interface Billing {
   amount: number; // valor de cada período (AOA)
   periodDays: number; // dias que cada pagamento confirmado dá de acesso
   dueAt: number | null; // fim do acesso pago
-  trialStartedAt?: number | null; // data de início do teste gratuito, só é definido uma vez
   graceDays: number; // dias de tolerância depois do vencimento
   warnDays: number; // avisa X dias antes
   manualBlock: boolean;
@@ -273,15 +291,6 @@ export interface Ad {
 }
 
 /* ---------- Salas / abas criadas pelo ADM ---------- */
-export interface RoomPost {
-  id: number;
-  title: string;
-  text: string;
-  image?: string;
-  link?: string;
-  createdAt: number;
-}
-
 export type RoomBlock =
   | { id: number; kind: "text"; title?: string; text: string }
   | { id: number; kind: "list"; variant: "prices" | "schedule" | "rules"; title?: string; items: { left: string; right: string }[] }
@@ -303,9 +312,6 @@ export interface Room {
   /** Pequena frase por baixo do nome. */
   subtitle?: string;
   blocks?: RoomBlock[];
-  /** Quando ativo, a sala funciona como comunidade com posts do ADM e comentários dos utilizadores. */
-  community?: boolean;
-  posts?: RoomPost[];
 }
 
 /* ---------- Sala de Jogos (o ADM publica jogos para todos) ---------- */

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Lock, X, BellRing, Megaphone, Clock3, Phone, MessageCircle, ExternalLink, Send, ChevronLeft } from "lucide-react";
 import type { Ad, AdminData, Room, RoomBlock } from "../lib/types";
-import { addCommunityComment, listCommunityComments, type CommunityComment } from "../lib/cloud";
 import type { BillInfo } from "../lib/billing";
 import { Field, PrimaryButton, ErrorBox, fieldCls } from "./ui";
 import { formatAOAshort } from "../lib/format";
@@ -13,12 +12,12 @@ export function Paywall({
 }: {
   admin: AdminData; houseName: string; isOwner: boolean;
   onSubmit: (amount: number, method: string, ref: string) => void;
-  onRedeem: (code: string) => boolean;
+  onRedeem: (code: string) => Promise<boolean>;
 }) {
   const b = admin.billing;
   const pending = b.payments.some((p) => p.status === "pending");
   const [f, setF] = useState({ amount: String(b.amount || ""), method: "", ref: "" });
-  const [code, setCode] = useState(""); const [err, setErr] = useState("");
+  const [code, setCode] = useState(""); const [err, setErr] = useState(""); const [redeeming, setRedeeming] = useState(false);
   return (
     <div className="thin-scroll flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-6">
       <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#FF4D6D]/15 text-[#FF4D6D]"><Lock size={28} /></span>
@@ -28,7 +27,6 @@ export function Paywall({
       </p>
       {b.amount > 0 && <p className="text-center font-display text-[26px] font-extrabold text-[#FFC107]">{formatAOAshort(b.amount)}</p>}
       {b.instructions && <div className="whitespace-pre-line rounded-2xl border border-white/10 bg-[#1b1b1b] p-3.5 text-[12.5px] text-neutral-300">{b.instructions}</div>}
-      {isOwner && <a href={`https://wa.me/244945379003?text=${encodeURIComponent(`Olá, pretendo pagar os 3000 Kz da CJ Gerenciamento. Casa: ${houseName || "não indicada"}. ID: ${admin.houseId}. Podem orientar-me?`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-3 text-[12px] font-extrabold uppercase text-black active:scale-[0.98]"><MessageCircle size={16} /> Pagar 3000 Kz pelo WhatsApp</a>}
       <p className="text-center text-[11px] text-neutral-500">ID desta casa: <b className="text-neutral-300">{admin.houseId}</b></p>
 
       {!isOwner ? (
@@ -50,7 +48,7 @@ export function Paywall({
           <p className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Tenho um código de ativação</p>
           <input value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setErr(""); }} placeholder="PAG-XXXX-XXXXXXXX" className={cn(fieldCls, "font-mono")} />
           <ErrorBox msg={err} />
-          <PrimaryButton tone="green" disabled={!code.trim()} onClick={() => { if (!onRedeem(code)) setErr("Código inválido, expirado ou de outra casa."); }}>Ativar</PrimaryButton>
+          <PrimaryButton tone="green" disabled={!code.trim() || redeeming} onClick={async () => { setRedeeming(true); setErr(""); try { if (!await onRedeem(code)) setErr("Código inválido, expirado ou de outra casa. Verifica a internet e tenta novamente."); } catch { setErr("Não foi possível validar o código. Verifica a internet e tenta novamente."); } finally { setRedeeming(false); } }}>{redeeming ? "A validar..." : "Ativar"}</PrimaryButton>
         </div>
       )}
     </div>
@@ -58,12 +56,7 @@ export function Paywall({
 }
 
 /** Aviso no topo quando o pagamento está a vencer ou em atraso. */
-export function BillBanner({ info, onAdm, trialDaysLeft = null }: { info: BillInfo; onAdm?: () => void; trialDaysLeft?: number | null }) {
-  if (trialDaysLeft !== null) return (
-    <p className="mx-4 mt-2 rounded-xl border border-[#00E5FF]/30 bg-[#00E5FF]/10 px-3 py-2 text-[11.5px] font-semibold text-[#8BEFFF]">
-      <Clock3 size={13} className="mr-1 inline" /> Teste gratuito CJ Gerenciamento: {trialDaysLeft === 1 ? "falta 1 dia" : `faltam ${trialDaysLeft} dias`}. Depois, o plano custa 3000 Kz por 30 dias.
-    </p>
-  );
+export function BillBanner({ info, onAdm }: { info: BillInfo; onAdm?: () => void }) {
   if (info.status !== "soon" && info.status !== "overdue") return null;
   const late = info.status === "overdue";
   return (
@@ -240,40 +233,17 @@ function Block({ b, color, roomName }: { b: RoomBlock; color: string; roomName: 
   }
 }
 
-export function RoomView({ room, onClose, accountId, authorName, accountEmail, staffToken }: {
-  room: Room; onClose: () => void; accountId?: string; authorName?: string; accountEmail?: string; staffToken?: string;
-}) {
+export function RoomView({ room, onClose }: { room: Room; onClose: () => void }) {
   const color = room.color || "#00E5FF";
   const blocks = room.blocks ?? [];
-  const [comments, setComments] = useState<CommunityComment[]>([]);
-  const [commentText, setCommentText] = useState("");
-  const [commentErr, setCommentErr] = useState("");
-  const [commentBusy, setCommentBusy] = useState(false);
-  const [commentLoading, setCommentLoading] = useState(false);
-  const loadComments = async () => {
-    if (!room.community) return;
-    setCommentLoading(true);
-    const r = await listCommunityComments(room.id);
-    if (r.ok) { setComments(r.data); setCommentErr(""); }
-    else setCommentErr("Os comentários da nuvem ainda não estão ativos. A sala e as publicações continuam disponíveis.");
-    setCommentLoading(false);
-  };
-  useEffect(() => { void loadComments(); }, [room.id, room.community]);
-  const submitComment = async () => {
-    const body = commentText.trim();
-    if (!body || !accountId || !authorName || commentBusy) return;
-    if (body.length > 1000) { setCommentErr("O comentário deve ter no máximo 1000 caracteres."); return; }
-    setCommentBusy(true); setCommentErr("");
-    const r = await addCommunityComment({ roomId: room.id, accountId, authorName, body, email: accountEmail, staffToken });
-    if (r.ok) { setComments((v) => [r.data, ...v].slice(0, 200)); setCommentText(""); }
-    else setCommentErr(r.error || "Não foi possível publicar o comentário.");
-    setCommentBusy(false);
-  };
   return (
     <div className="fade absolute inset-0 z-40 flex flex-col bg-[#121212]">
       <div className="relative shrink-0">
         {room.cover ? (
-          <div className="relative h-36"><img src={room.cover} alt="" className="h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/30 to-black/40" /></div>
+          <div className="relative h-36">
+            <img src={room.cover} alt="" className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/30 to-black/40" />
+          </div>
         ) : <div className="h-14" style={{ background: `linear-gradient(180deg, ${color}2e, transparent)` }} />}
         <button onClick={onClose} className="absolute left-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-black/55 text-white" aria-label="Voltar"><ChevronLeft size={18} /></button>
         <div className={cn("px-4", room.cover ? "absolute inset-x-0 bottom-2" : "-mt-3 pb-1")}>
@@ -284,20 +254,7 @@ export function RoomView({ room, onClose, accountId, authorName, accountEmail, s
       <div className="thin-scroll flex-1 space-y-3 overflow-y-auto px-4 pb-8 pt-3">
         {room.content && <p className="whitespace-pre-line text-[13.5px] leading-relaxed text-neutral-200">{room.content}</p>}
         {blocks.map((b) => <Block key={b.id} b={b} color={color} roomName={room.name} />)}
-        {(room.posts ?? []).map((post) => <article key={post.id} className="overflow-hidden rounded-2xl border border-white/10 bg-[#1b1b1b]">
-          {post.image && <img src={post.image} alt={post.title} loading="lazy" className="max-h-64 w-full object-cover" />}
-          <div className="space-y-2 p-3.5"><p className="font-display text-[17px] font-extrabold">{post.title}</p>{post.text && <p className="whitespace-pre-line text-[13px] leading-relaxed text-neutral-300">{post.text}</p>}
-          {post.link && <a href={post.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-[#00FF88] px-3 py-2 text-[11.5px] font-extrabold uppercase text-black"><ExternalLink size={13} />Abrir link</a>}
-          <p className="text-[10.5px] text-neutral-500">Publicação do ADM • {new Date(post.createdAt).toLocaleDateString("pt-AO")}</p></div>
-        </article>)}
-        {room.community && <section className="rounded-2xl border border-white/10 bg-[#1b1b1b] p-3.5">
-          <div className="mb-3 flex items-center justify-between"><h4 className="flex items-center gap-2 font-display text-[16px] font-extrabold uppercase"><MessageCircle size={15} style={{ color }} /> Comentários</h4><button onClick={() => void loadComments()} className="text-[10.5px] font-bold text-neutral-400">{commentLoading ? "A atualizar…" : "Atualizar"}</button></div>
-          {accountId && authorName ? <div className="mb-3 space-y-2"><textarea rows={2} maxLength={1000} value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Partilha uma opinião respeitosa…" className={fieldCls} /><button disabled={!commentText.trim() || commentBusy} onClick={() => void submitComment()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#00E5FF] py-2.5 text-[11.5px] font-extrabold uppercase text-black disabled:opacity-40"><Send size={13} />{commentBusy ? "A publicar…" : "Publicar comentário"}</button></div> : <p className="mb-3 text-[11px] text-neutral-500">Pré-visualização da comunidade.</p>}
-          {commentErr && <p className="mb-2 rounded-lg bg-[#FFC107]/10 p-2 text-[11px] text-[#FFD66B]">{commentErr}</p>}
-          {comments.map((c) => <div key={c.id} className="border-t border-white/[0.07] py-2.5 first:border-0"><div className="flex items-center justify-between gap-2"><p className="text-[12px] font-bold">{c.author_name || "Utilizador"}</p><p className="text-[9.5px] text-neutral-500">{new Date(c.created_at).toLocaleString("pt-AO")}</p></div><p className="mt-1 whitespace-pre-line text-[12px] leading-relaxed text-neutral-300">{c.body}</p></div>)}
-          {!comments.length && !commentLoading && <p className="py-3 text-center text-[11.5px] text-neutral-500">Ainda não há comentários nesta sala.</p>}
-        </section>}
-        {!room.content && blocks.length === 0 && !(room.posts ?? []).length && !room.community && <p className="text-[13px] text-neutral-500">Esta sala ainda não tem conteúdo.</p>}
+        {!room.content && blocks.length === 0 && <p className="text-[13px] text-neutral-500">Esta sala ainda não tem conteúdo.</p>}
       </div>
     </div>
   );

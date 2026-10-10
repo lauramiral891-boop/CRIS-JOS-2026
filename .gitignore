@@ -1,7 +1,18 @@
 node_modules/
 dist/
+_backup_icons/
+*.log
+.vercel
+.env*
 .env
 .env.*
 !.env.example
+project
+
+# Cópias de segurança locais: não publicar
 *.bak
-*.bak[0-9]
+*.bak-*
+*.backup-*
+backups/
+*.backup
+corrigir-pdf.mjs

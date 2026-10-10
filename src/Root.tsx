@@ -4,7 +4,7 @@ import AdminRoom from "./components/AdminRoom";
 import Workspace from "./App";
 import { getAccount, loadSession, saveSession, updateAccount, type Account, type Session } from "./lib/accounts";
 import { setNamespace } from "./lib/storage";
-import { cloudOn, lastCloudEmail, logOwnerAccess, logStaffAccess } from "./lib/cloud";
+import { cloudOn, lastCloudEmail } from "./lib/cloud";
 import { loadStaffToken, syncGlobalDown, restoreAccount } from "./lib/sync";
 
 /** Escolhe a conta ativa. Cada conta vê só o seu próprio espaço de dados. */
@@ -19,18 +19,6 @@ export default function Root() {
   const [fresh, setFresh] = useState(false);
   const [adm, setAdm] = useState(false);
   const [account, setAccount] = useState<Account | null>(() => (session ? getAccount(session.accountId) : null));
-
-  useEffect(() => {
-    if (!session || !account || !cloudOn()) return;
-    if (session.role === "owner" && account.kind === "email") {
-      void logOwnerAccess(account.login, account.id, account.houseName);
-      return;
-    }
-    if (session.role === "staff") {
-      const staff = loadStaffToken(account.id);
-      if (staff?.token) void logStaffAccess(staff.token, account.id, account.houseName);
-    }
-  }, [session?.accountId, session?.role, account?.id, account?.houseName]);
 
   useEffect(() => {
     if (session) return;

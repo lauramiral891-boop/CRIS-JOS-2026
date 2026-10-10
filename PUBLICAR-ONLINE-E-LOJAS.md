@@ -3,7 +3,7 @@
 ## 1. Online (link para todos) — 10 minutos, grátis
 1. `npm install` e `npm run build` (gera `dist/`).
 2. Crie conta grátis no **Netlify** (ou Vercel / Cloudflare Pages), ligue este projeto ou arraste a pasta `dist`. Já existem `netlify.toml` e `vercel.json`.
-3. Antes do build, configure apenas variáveis públicas necessárias em `.env` (ex.: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`). **Não configure `VITE_LICENSE_SECRET`: tudo o que começa por `VITE_` pode ser lido no frontend. A cobrança por código offline continua legada e não deve ser tratada como proteção comercial até a validação migrar para servidor.**
+3. Antes do build, crie `.env`: `VITE_LICENSE_SECRET=frase-longa-secreta` e (opcional) `VITE_MANAGERS="Nome|Função|923000000;..."`.
 4. Abra o link no telemóvel → «Adicionar ao ecrã principal». Funciona como app (PWA), em Android e iPhone (Safari → Partilhar → Adicionar ao ecrã principal).
 
 ## 2. Android (Play Store) — conta Google Play (25 USD, pagamento único)
