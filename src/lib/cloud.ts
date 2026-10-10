@@ -80,6 +80,60 @@ export async function verifyCode(email: string, code: string): Promise<Res<{ uid
   } catch { return { ok: false, error: offline }; }
 }
 
+/** Configura a palavra-passe da conta autenticada por código de email. */
+export async function setCloudPassword(email: string, password: string): Promise<Res> {
+  if (!cloudOn()) return { ok: false, error: "Nuvem não configurada." };
+  const t = await token(email.trim().toLowerCase());
+  if (!t) return { ok: false, error: "A sessão na nuvem expirou. Confirme novamente o email por código." };
+  try {
+    const r = await raw("/auth/v1/user", {
+      method: "PUT",
+      token: t,
+      body: JSON.stringify({ password }),
+    });
+    return r.ok
+      ? { ok: true, data: undefined }
+      : { ok: false, error: await errText(r, "Não foi possível configurar a palavra-passe da nuvem.") };
+  } catch {
+    return { ok: false, error: offline };
+  }
+}
+
+/** Inicia sessão na nuvem com email e palavra-passe e guarda os tokens. */
+export async function signInWithPassword(email: string, password: string): Promise<Res<{ uid: string }>> {
+  if (!cloudOn()) return { ok: false, error: "Nuvem não configurada." };
+  const normalized = email.trim().toLowerCase();
+  try {
+    const r = await raw("/auth/v1/token?grant_type=password", {
+      method: "POST",
+      body: JSON.stringify({ email: normalized, password }),
+    });
+    if (!r.ok) {
+      return { ok: false, error: await errText(r, "Email ou palavra-passe da nuvem incorretos.") };
+    }
+    const j = await r.json() as {
+      access_token: string;
+      refresh_token: string;
+      expires_in?: number;
+      user?: { id: string };
+    };
+    if (!j.access_token || !j.refresh_token) {
+      return { ok: false, error: "A nuvem não devolveu uma sessão válida." };
+    }
+    const stored: Stored = {
+      access: j.access_token,
+      refresh: j.refresh_token,
+      exp: Date.now() + (j.expires_in ?? 3600) * 1000,
+      uid: j.user?.id ?? "",
+    };
+    writeS(normalized, stored);
+    rememberCloudEmail(normalized);
+    return { ok: true, data: { uid: stored.uid } };
+  } catch {
+    return { ok: false, error: offline };
+  }
+}
+
 export async function getCloudAccessToken(email: string): Promise<string | null> {
   return token(email.trim().toLowerCase());
 }

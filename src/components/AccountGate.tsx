@@ -6,7 +6,7 @@ import { fileToPhoto } from "../lib/image";
 import {
   CODE_TTL_MIN, MIN_PASS, cancelSignup, completeSignup, loginOwner, parseLogin, loginStaff, resendCode, staffKnownLocally, startSignup, updateAccount, verifySignup, type Account,
 } from "../lib/accounts";
-import { cloudOn, sendCode, verifyCode } from "../lib/cloud";
+import { cloudOn, sendCode, verifyCode, setCloudPassword, signInWithPassword } from "../lib/cloud";
 import { loginStaffCloud, pushAccount, restoreAccount } from "../lib/sync";
 import { hashPass } from "../lib/auth";
 
@@ -122,25 +122,65 @@ export default function AccountGate({ onOwnerEnter, onStaffEnter, onAdm }: Props
   const submitCode = async () => {
     if (busy) return;
     let r;
+    let cloudSynced = !cloud;
+    let passwordSetupError = "";
+
     if (cloud) {
-      if (code.replace(/\D/g, "").length !== 6) return setErr("Introduza os 6 dígitos do código.");
+      if (code.replace(/\D/g, "").length !== 6) {
+        return setErr("Introduza os 6 dígitos do código.");
+      }
+
       setBusy(true);
       const v = await verifyCode(pendLogin, code);
-      if (!v.ok) { setBusy(false); return setErr(v.error); }
+
+      if (!v.ok) {
+        setBusy(false);
+        return setErr(v.error);
+      }
+
+      const passwordSetup = await setCloudPassword(pendLogin, pw);
+      cloudSynced = passwordSetup.ok;
+      if (!passwordSetup.ok) passwordSetupError = passwordSetup.error;
+
       r = completeSignup(pendLogin);
-      if (r.ok) await pushAccount(r.account.id, true);
+
+      if (r.ok) {
+        const pushed = await pushAccount(r.account.id, true);
+        cloudSynced = pushed && cloudSynced;
+      }
+
       setBusy(false);
-    } else r = verifySignup(pendLogin, code);
+    } else {
+      r = verifySignup(pendLogin, code);
+    }
+
     if (!r.ok) {
       setErr(r.error);
-      if (r.dead) { setShownCode(""); setView("signup"); }
+      if (r.dead) {
+        setShownCode("");
+        setView("signup");
+      }
       return;
     }
-    // conta criada → volta ao ecrã de entrada para entrar com os dados
-    setLid(pendShow); setLpw(""); setPw(""); setPw2("");
-    setPhoto(""); setHouse(""); setOwner(""); setId(""); setShownCode(""); setCode("");
-    setView("login"); setErr("");
-    setOk(`Conta criada com sucesso! O seu ID é ${r.account.id}. Agora entre com os seus dados.`);
+
+    setLid(pendShow);
+    setLpw("");
+    setPw("");
+    setPw2("");
+    setPhoto("");
+    setHouse("");
+    setOwner("");
+    setId("");
+    setShownCode("");
+    setCode("");
+    setView("login");
+    setErr("");
+
+    setOk(
+      cloudSynced
+        ? `Conta criada e sincronização confirmada! O seu ID é ${r.account.id}. Agora entre com os seus dados.`
+        : `A conta foi criada, mas o acesso em outros telemóveis ainda não está confirmado. Guarde o seu ID (${r.account.id}). ${passwordSetupError ? "A palavra-passe da nuvem não foi configurada: " + passwordSetupError : "A gravação na nuvem não foi totalmente confirmada."} Verifique a internet e tente novamente ou use a recuperação por email.`
+    );
   };
 
   const resend = async () => {
@@ -158,11 +198,35 @@ export default function AccountGate({ onOwnerEnter, onStaffEnter, onAdm }: Props
   const backFromVerify = () => { cancelSignup(pendLogin); setShownCode(""); go("signup"); };
 
   /* ---- 3. entrar ---- */
-  const submitLogin = () => {
+  const submitLogin = async () => {
+    if (busy) return;
     if (!lid.trim() || !lpw) return setErr("Preencha o email/número e a palavra-passe.");
-    const r = loginOwner(lid, lpw);
-    if (!r.ok) return setErr(r.error);
-    onOwnerEnter(r.account);
+
+    const local = loginOwner(lid, lpw);
+    const parsed = parseLogin(lid);
+
+    if (cloud && parsed.ok && parsed.kind === "email") {
+      setBusy(true);
+      const remote = await signInWithPassword(parsed.login, lpw);
+
+      if (remote.ok) {
+        setBusy(false);
+        if (local.ok) return onOwnerEnter(local.account);
+
+        const restored = await restoreAccount(parsed.login);
+        if (!restored.ok) return setErr(restored.error);
+        return onOwnerEnter(restored.account);
+      }
+
+      setBusy(false);
+      if (local.ok) {
+        return setErr("A palavra-passe local está correcta, mas a sessão da nuvem não foi confirmada. Use «Esqueceu a senha?» para recuperar a conta e configurar a palavra-passe da nuvem. Se estiver sem internet, volte a tentar quando estiver ligado.");
+      }
+      return setErr("Não foi possível entrar na nuvem. Confirme o email e a palavra-passe ou use «Esqueceu a senha?» para recuperar a conta.");
+    }
+
+    if (!local.ok) return setErr(local.error);
+    onOwnerEnter(local.account);
   };
 
   /* ---- recuperar conta da nuvem (outro telemóvel / palavra-passe esquecida) ---- */
@@ -182,6 +246,11 @@ export default function AccountGate({ onOwnerEnter, onStaffEnter, onAdm }: Props
     setBusy(true);
     const v = await verifyCode(rMail, rCode);
     if (!v.ok) { setBusy(false); return setErr(v.error); }
+    const passwordSet = await setCloudPassword(rMail, rPw);
+    if (!passwordSet.ok) {
+      setBusy(false);
+      return setErr("O código foi confirmado, mas a palavra-passe da nuvem não foi configurada: " + passwordSet.error + " Peça um novo código e tente novamente.");
+    }
     const r = await restoreAccount(rMail);
     if (!r.ok) { setBusy(false); return setErr(r.error); }
     const updated = updateAccount(r.account.id, { passHash: hashPass(rPw) });
