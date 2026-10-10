@@ -25,7 +25,9 @@ export async function initNotifications() {
       await L.createChannel({ id: CH_ALERT, name: "Alertas (tempo esgotado)", description: "Fim de sessões e avisos urgentes", importance: 5, visibility: 1, vibration: true, lights: true });
       await L.createChannel({ id: CH_GENERAL, name: "Avisos da Game House", description: "Vendas, reservas, relatórios e avisos da CJ", importance: 4, visibility: 1, vibration: true });
     }
-  } catch (e) { alert("Init erro: " + (e instanceof Error ? e.message : String(e))); }
+  } catch {
+    // A aplicação continua utilizável se as notificações nativas falharem.
+  }
 }
 
 export const notifSupported = () => isNative() || (typeof window !== "undefined" && "Notification" in window);
@@ -33,12 +35,16 @@ export const notifPermission = (): Perm => (isNative() ? nativePerm : typeof win
 
 /** Tem de ser chamado a partir de um toque do utilizador. No Android 13+ abre o pedido «Permitir notificações». */
 export async function askNotifPermission(): Promise<Perm> {
-  alert("Diag v4: nativo=" + isNative() + " plataforma=" + (cap()?.getPlatform?.() ?? "nenhuma"));
   if (isNative()) {
     try {
-      const L = await Promise.race([ln(), new Promise<never>((_, no) => setTimeout(() => no(new Error("import do plugin sem resposta em 5s")), 5000))]);
-      const T = <X>(p: Promise<X>) => new Promise<X>((ok, no) => { setTimeout(() => no(new Error("sem resposta em 5s")), 5000); p.then(ok, no); }); const a = await T(L.checkPermissions()); alert("Antes=" + a.display); const b = await T(L.requestPermissions()); nativePerm = mapPerm(b.display); alert("Depois=" + b.display);
-    } catch (e) { alert("Erro notif: " + (e instanceof Error ? e.message : String(e))); }
+      const L = await ln();
+      nativePerm = mapPerm((await L.checkPermissions()).display);
+      if (nativePerm !== "granted") {
+        nativePerm = mapPerm((await L.requestPermissions()).display);
+      }
+    } catch {
+      // Não mostrar erros técnicos ao utilizador.
+    }
     return nativePerm;
   }
   if (!notifSupported()) return "unsupported";
