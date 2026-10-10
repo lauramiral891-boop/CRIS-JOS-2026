@@ -1,3 +1,4 @@
+import { getCloudAccessToken, lastCloudEmail } from "./cloud";
 import { formatAOAshort } from "./format";
 import type { AiMemory } from "./types";
 import { BRAND, BRAND_FACTS, PERSONA, memoryPrompt, recall, type Hit } from "./brain";
@@ -77,6 +78,71 @@ export async function askOnline(
   firstByteMs = 14000,
   opts?: { maxTokens?: number; temperature?: number }
 ) {
+  // CJ_GEMINI_PROXY_INTEGRATION
+  const question = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
+  const normalizedQuestion = question.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const needsSearch = /\b(pesquis\w*|procur\w*|google|internet|fontes?|noticias?|hoje|agora|atual\w*|recent\w*|preco atual|lancament\w*|ultim\w*)\b/i.test(normalizedQuestion);
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL ?? "").trim().replace(/\/$/, "");
+  const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
+  const email = lastCloudEmail();
+  const accessToken = email ? await getCloudAccessToken(email) : null;
+
+  if (needsSearch && (!supabaseUrl || !supabaseKey || !accessToken)) {
+    throw new Error("Pesquisa Google requer uma sessão Supabase válida.");
+  }
+
+  if (supabaseUrl && supabaseKey && accessToken) {
+    try {
+      const geminiRes = await fetch(supabaseUrl + "/functions/v1/cj-gemini", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: supabaseKey,
+          Authorization: "Bearer " + accessToken
+        },
+        signal,
+        body: JSON.stringify({
+          history: history.slice(-8),
+          system,
+          search: needsSearch,
+          maxOutputTokens: opts?.maxTokens ?? 700,
+          temperature: opts?.temperature ?? 0.35
+        })
+      });
+
+      if (geminiRes.ok) {
+        const result = await geminiRes.json() as {
+          text?: string;
+          searched?: boolean;
+          sources?: { title?: string; url?: string }[];
+          error?: string;
+        };
+        if (typeof result.text === "string" && result.text.trim()) {
+          let answer = result.text.trim();
+          if (needsSearch && result.searched && result.sources?.length) {
+            answer += "\n\nFontes consultadas:\n" +
+              result.sources.map((source) => "- " + (source.title || "Fonte") + ": " + source.url)
+                .join("\n");
+          } else if (needsSearch) {
+            throw new Error("Não foi possível confirmar as fontes da pesquisa.");
+          }
+          onDelta(answer);
+          return;
+        }
+        if (needsSearch) throw new Error(result.error || "A pesquisa não devolveu uma resposta.");
+      } else if (needsSearch) {
+        throw new Error("Pesquisa Google indisponível (HTTP " + geminiRes.status + ").");
+      }
+    } catch (error) {
+      if (needsSearch || signal.aborted) throw error;
+      // Para perguntas comuns, tenta o fornecedor anterior se o Gemini falhar.
+    }
+  }
+
+  if (needsSearch) {
+    throw new Error("Não foi possível efectuar uma pesquisa Google verificada.");
+  }
+
   const useKey = key.trim().length > 0;
   const url = useKey ? "https://api.openai.com/v1/chat/completions" : "https://text.pollinations.ai/openai";
   const headers: Record<string, string> = { "Content-Type": "application/json" };

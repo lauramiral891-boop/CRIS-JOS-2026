@@ -80,6 +80,10 @@ export async function verifyCode(email: string, code: string): Promise<Res<{ uid
   } catch { return { ok: false, error: offline }; }
 }
 
+export async function getCloudAccessToken(email: string): Promise<string | null> {
+  return token(email.trim().toLowerCase());
+}
+
 async function token(email: string): Promise<string | null> {
   const s = readS(email);
   if (!s) return null;
