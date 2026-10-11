@@ -22,9 +22,9 @@ import { clockHM, formatAOAshort, timeAgo } from "../lib/format";
 import { defaultData, loadAdminFor, loadDataFor, saveAdminFor, saveDataFor, uid } from "../lib/storage";
 import { cn } from "../utils/cn";
 
-type TabId = "accounts" | "live" | "bill" | "ai" | "ads" | "rooms" | "alerts" | "mgrs" | "mem" | "games";
+type TabId = "block" | "accounts" | "live" | "bill" | "ai" | "ads" | "rooms" | "alerts" | "mgrs" | "mem" | "games";
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: "live", label: "Painel", icon: Activity }, { id: "accounts", label: "Contas", icon: Users }, { id: "bill", label: "Cobrança", icon: CreditCard }, { id: "ai", label: "IA", icon: Bot },
+  { id: "live", label: "Painel", icon: Activity }, { id: "accounts", label: "Contas", icon: Users }, { id: "block", label: "Bloqueio", icon: Lock }, { id: "bill", label: "Cobrança", icon: CreditCard }, { id: "ai", label: "IA", icon: Bot },
   { id: "ads", label: "Anúncios", icon: Megaphone }, { id: "rooms", label: "Salas", icon: DoorOpen }, { id: "alerts", label: "Avisos", icon: BellRing },
   { id: "mgrs", label: "Gerentes", icon: Users }, { id: "mem", label: "Memórias", icon: Brain },
   { id: "games", label: "Jogos", icon: Gamepad2 },
@@ -579,6 +579,45 @@ function AlertsTab({ g, onG }: { g: GlobalAdm; onG: OnG }) {
   );
 }
 
+function BlockTab({ g, onG, onWarn }: { g: GlobalAdm; onG: OnG; onWarn: (m: string) => void }) {
+  const b = { title: "", text: "", image: "", whatsapp: "", ...(g.blockScreen ?? {}) };
+  const set = (p: Partial<typeof b>) => onG((x) => ({ ...x, blockScreen: { title: "", text: "", image: "", whatsapp: "", ...(x.blockScreen ?? {}), ...p } }));
+  const pick = async (file?: File) => {
+    if (!file) return;
+    try { set({ image: await fileToImage(file, 800, 0.75) }); }
+    catch (e) { onWarn(e instanceof Error ? e.message : "Não foi possível carregar a imagem."); }
+  };
+  return (
+    <div className="thin-scroll flex-1 space-y-3 overflow-y-auto px-4 py-3">
+      <div className={card}>
+        <p className={cn(lbl, "mb-2")}>Ecrã de conta bloqueada</p>
+        <div className="space-y-2">
+          <Input value={b.title} onChange={(e) => set({ title: e.target.value })} placeholder="Título (vazio = Conta Bloqueada)" />
+          <textarea rows={4} value={b.text} onChange={(e) => set({ text: e.target.value })} placeholder="Texto (vazio = Chame um assistente para fazer o pagamento.)" className={fieldCls} />
+          <Input value={b.whatsapp} onChange={(e) => set({ whatsapp: e.target.value })} placeholder="WhatsApp e telefone (vazio = 945379003)" />
+          <label className={cn(btn, "block cursor-pointer bg-white/10 text-center")}>
+            {b.image ? "Trocar imagem" : "Adicionar imagem (opcional)"}
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
+          {b.image && (
+            <>
+              <img src={b.image} alt="" className="max-h-40 w-full rounded-xl object-cover" />
+              <button onClick={() => set({ image: "" })} className={cn(btn, "w-full bg-[#FF4D6D]/15 text-[#FF4D6D]")}>Tirar imagem</button>
+            </>
+          )}
+        </div>
+        <p className="mt-2 text-[10.5px] text-neutral-500">É isto que o cliente vê quando a conta está bloqueada. Com tudo vazio aparece o texto padrão e o contacto 945379003.</p>
+      </div>
+      <div className={card}>
+        <p className={cn(lbl, "mb-2")}>Pré-visualização</p>
+        <p className="font-display text-[18px] font-extrabold uppercase">{b.title.trim() || "Conta Bloqueada"}</p>
+        <p className="whitespace-pre-line text-[12.5px] text-neutral-300">{b.text.trim() || "Chame um assistente para fazer o pagamento."}</p>
+        <p className="mt-1 text-[12px] font-bold text-[#00FF88]">WhatsApp / ligar: {b.whatsapp.trim() || "945379003"}</p>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------- gerentes reais (ajuda por WhatsApp) ---------------- */
 function ManagersTab({ g, onG }: { g: GlobalAdm; onG: OnG }) {
   const [f, setF] = useState({ name: "", role: "Suporte", whatsapp: "", hours: "" });
@@ -856,6 +895,7 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
           {tab === "mem" && <MemoryTab g={g} onG={onG} />}
           {tab === "games" && <GamesTab g={g} onG={onG} onWarn={setWarn} />}
           {tab === "accounts" && <AccountsTab />}
+          {tab === "block" && <BlockTab g={g} onG={onG} onWarn={setWarn} />}
         </>
       )}
     </div>

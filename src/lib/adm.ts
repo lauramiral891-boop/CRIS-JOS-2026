@@ -58,6 +58,7 @@ export function loadGlobalAdm(): GlobalAdm {
       managers: Array.isArray(p.managers) && p.managers.length ? (p.managers as Manager[]).slice(0, 12) : base.managers,
       memories: Array.isArray(p.memories) ? (p.memories as AiMemory[]).slice(0, 300) : [],
       games: Array.isArray(p.games) ? (p.games as Game[]).slice(0, 60) : [],
+      blockScreen: p.blockScreen && typeof p.blockScreen === "object" ? (p.blockScreen as GlobalAdm["blockScreen"]) : undefined,
     };
   } catch {
     return base;

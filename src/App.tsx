@@ -20,7 +20,7 @@ import ActivityView from "./components/ActivityView";
 import StaffProfile from "./components/StaffProfile";
 import Confirm from "./components/Confirm";
 import { GoalSheet } from "./components/SettingsSheets";
-import { AdBanner, BillBanner, NotifPrompt, Paywall, RoomChips, RoomView } from "./components/BillingUI";
+import { AdBanner, BillBanner, NotifPrompt, Paywall, BlockedScreen, RoomChips, RoomView } from "./components/BillingUI";
 import type { PlanDraft } from "./components/PlanForm";
 import HomeScreen from "./screens/Home";
 import BookingsScreen, { type NewBooking } from "./screens/Bookings";
@@ -1012,7 +1012,9 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
           {needSetup ? (
             <SetupWizard account={account} onFinish={finishSetup} onBack={onExit} />
-          ) : (bill.status === "blocked" || srvBlocked) ? (
+          ) : srvBlocked ? (
+            <BlockedScreen houseId={account.id} houseName={config.houseName} />
+          ) : bill.status === "blocked" ? (
             <Paywall admin={admin} houseName={config.houseName} isOwner={isOwner} onSubmit={submitPayment} onRedeem={redeemCode} />
           ) : (
             <>

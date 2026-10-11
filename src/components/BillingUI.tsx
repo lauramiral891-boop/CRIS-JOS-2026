@@ -1,3 +1,4 @@
+import { loadGlobalAdm as loadGlobalAdmForBlock } from "../lib/adm";
 import { useEffect, useState } from "react";
 import { Lock, X, BellRing, Megaphone, Clock3, Phone, MessageCircle, ExternalLink, Send, ChevronLeft } from "lucide-react";
 import type { Ad, AdminData, Room, RoomBlock } from "../lib/types";
@@ -256,6 +257,30 @@ export function RoomView({ room, onClose }: { room: Room; onClose: () => void })
         {blocks.map((b) => <Block key={b.id} b={b} color={color} roomName={room.name} />)}
         {!room.content && blocks.length === 0 && <p className="text-[13px] text-neutral-500">Esta sala ainda não tem conteúdo.</p>}
       </div>
+    </div>
+  );
+}
+
+
+/* Ecrã de conta bloqueada pelo servidor (texto e imagem editáveis pelo ADM) */
+export function BlockedScreen({ houseId, houseName }: { houseId: string; houseName: string }) {
+  const [cfg] = useState(() => loadGlobalAdmForBlock().blockScreen);
+  const title = cfg?.title?.trim() || "Conta Bloqueada";
+  const text = cfg?.text?.trim() || "Chame um assistente para fazer o pagamento.";
+  const num = cfg?.whatsapp?.trim() || "945379003";
+  const digits = num.replace(/\D/g, "");
+  const msg = `Olá! A minha conta está bloqueada. Casa: ${houseName || "-"}. ID: ${houseId}. Quero fazer o pagamento.`;
+  const bt = "block w-full rounded-xl px-3 py-3 text-center text-[13px] font-extrabold uppercase active:scale-95";
+  return (
+    <div className="thin-scroll flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-6">
+      {cfg?.image
+        ? <img src={cfg.image} alt="" className="mx-auto max-h-56 w-full rounded-2xl object-cover" />
+        : <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-[#FF4D6D]/15 text-[#FF4D6D]"><Lock size={28} /></span>}
+      <h2 className="text-center font-display text-[24px] font-extrabold uppercase">{title}</h2>
+      <p className="whitespace-pre-line text-center text-[13px] leading-relaxed text-neutral-300">{text}</p>
+      <a href={waLink(digits, msg)} target="_blank" rel="noopener noreferrer" className={bt + " bg-[#00FF88] text-black"}>WhatsApp {num}</a>
+      <a href={"tel:" + digits} className={bt + " bg-white/10 text-white"}>Ligar {num}</a>
+      <p className="text-center text-[11px] text-neutral-500">ID desta casa: <b className="text-neutral-300">{houseId}</b></p>
     </div>
   );
 }

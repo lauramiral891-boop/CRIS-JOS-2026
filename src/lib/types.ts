@@ -342,6 +342,8 @@ export interface GlobalAdm {
   memories: AiMemory[];
   /** Jogos publicados na Sala de Jogos. */
   games: Game[];
+  /** Ecrã de conta bloqueada (texto, imagem e contacto editáveis pelo ADM). */
+  blockScreen?: { title: string; text: string; image: string; whatsapp: string };
 }
 
 export interface Manager {
