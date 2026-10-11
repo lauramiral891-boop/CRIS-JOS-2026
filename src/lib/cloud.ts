@@ -213,7 +213,7 @@ export interface HouseGet { ok: boolean; error?: string; exists?: boolean; rev?:
 export async function houseGet(email: string, knownRev: number | null): Promise<Res<HouseGet>> {
   const r = await rpc<HouseGet>("house_get", { p_known_rev: knownRev }, email);
   if (!r.ok) return r;
-  if (!r.data.ok) return { ok: false, error: r.data.error === "auth" ? "Sem sessão na nuvem." : "Não foi possível ler da nuvem." };
+  if (!r.data.ok) return { ok: false, error: r.data.error === "auth" ? "Sem sessão na nuvem." : r.data.error === "blocked" ? "BLOQUEADO" : "Não foi possível ler da nuvem." };
   return r;
 }
 
@@ -229,7 +229,7 @@ export async function housePush(email: string, p: { account: unknown; data: unkn
   const j = r.data;
   if (j.ok) return { ok: true, data: { ok: true, rev: j.rev ?? 0 } };
   if (j.error === "conflict") return { ok: true, data: { ok: false, conflict: true, rev: j.rev ?? 0, account: j.account, data: j.data, admin: j.admin } };
-  return { ok: false, error: "Não foi possível guardar na nuvem." };
+  return { ok: false, error: j.error === "blocked" ? "BLOQUEADO" : "Não foi possível guardar na nuvem." };
 }
 
 /** O código de convite está livre em toda a nuvem? (erro de rede = não sabemos) */
@@ -343,3 +343,17 @@ export async function globalPush(data: unknown): Promise<Res<string>> {
     return { ok: true, data: at };
   } catch { return { ok: false, error: offline }; }
 }
+
+/* ---------- controlo de contas (só ADM) ---------- */
+export interface AdmAccount {
+  owner_uid: string; account_id: string | null; email: string | null; house_name: string;
+  created_at: string; last_access: string | null; status: "active" | "suspended";
+  paid_until: string | null; plan: string; note: string; blocked: boolean;
+}
+export const admAccounts = () => rpc<AdmAccount[]>("adm_accounts", {}, ADM_EMAIL);
+export const admSetControl = (owner: string, status: "active" | "suspended", plan: string, note: string, grace = 0) =>
+  rpc<unknown>("adm_set_control", { p_owner: owner, p_status: status, p_plan: plan, p_note: note, p_grace: grace }, ADM_EMAIL);
+export const admConfirmPayment = (owner: string, days: number) =>
+  rpc<string>("adm_confirm_payment", { p_owner: owner, p_days: days }, ADM_EMAIL);
+export const myControl = (email: string) =>
+  rpc<{ blocked: boolean; status: string; paid_until: string | null }>("my_control", {}, email);

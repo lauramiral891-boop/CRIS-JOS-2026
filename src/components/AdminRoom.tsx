@@ -17,13 +17,14 @@ import { admDirty, lastPublishError, pushGlobalUp, syncGlobalDown } from "../lib
 import { waLink } from "./BillingUI";
 import { loadAccounts } from "../lib/accounts";
 import { fileToImage } from "../lib/image";
+import AccountsTab from "./AccountsTab";
 import { clockHM, formatAOAshort, timeAgo } from "../lib/format";
 import { defaultData, loadAdminFor, loadDataFor, saveAdminFor, saveDataFor, uid } from "../lib/storage";
 import { cn } from "../utils/cn";
 
-type TabId = "live" | "bill" | "ai" | "ads" | "rooms" | "alerts" | "mgrs" | "mem" | "games";
+type TabId = "accounts" | "live" | "bill" | "ai" | "ads" | "rooms" | "alerts" | "mgrs" | "mem" | "games";
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: "live", label: "Painel", icon: Activity }, { id: "bill", label: "Cobrança", icon: CreditCard }, { id: "ai", label: "IA", icon: Bot },
+  { id: "live", label: "Painel", icon: Activity }, { id: "accounts", label: "Contas", icon: Users }, { id: "bill", label: "Cobrança", icon: CreditCard }, { id: "ai", label: "IA", icon: Bot },
   { id: "ads", label: "Anúncios", icon: Megaphone }, { id: "rooms", label: "Salas", icon: DoorOpen }, { id: "alerts", label: "Avisos", icon: BellRing },
   { id: "mgrs", label: "Gerentes", icon: Users }, { id: "mem", label: "Memórias", icon: Brain },
   { id: "games", label: "Jogos", icon: Gamepad2 },
@@ -854,6 +855,7 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
           {tab === "mgrs" && <ManagersTab g={g} onG={onG} />}
           {tab === "mem" && <MemoryTab g={g} onG={onG} />}
           {tab === "games" && <GamesTab g={g} onG={onG} onWarn={setWarn} />}
+          {tab === "accounts" && <AccountsTab />}
         </>
       )}
     </div>
