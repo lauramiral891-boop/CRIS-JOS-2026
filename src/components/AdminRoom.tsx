@@ -759,7 +759,10 @@ function CloudBar({ g, onPublished }: { g: GlobalAdm; onPublished: () => void })
   return (
     <div className={cn("mx-3 mt-2 rounded-xl border px-3 py-2 text-[11.5px]", on && !dirty ? "border-[#00FF88]/35 bg-[#00FF88]/[0.07]" : "border-[#FFC107]/40 bg-[#FFC107]/10")}>
       {on ? (
-        <p className={cn("font-semibold", dirty ? "text-[#FFC107]" : "text-[#00FF88]")}>{dirty ? "A publicar as alterações… tenta sozinho quando houver rede." : "Nuvem ligada ✓ (a sessão fica guardada neste telemóvel)"}</p>
+        <div className="flex items-center gap-2">
+          <span className={cn("min-w-0 flex-1 font-semibold", dirty ? "text-[#FFC107]" : "text-[#00FF88]")}>{dirty ? "A publicar as alterações… tenta sozinho quando houver rede." : "Nuvem ligada ✓ (a sessão fica guardada)"}</span>
+          <button onClick={() => { signOutCloud(ADM_EMAIL); setOn(false); setStage(0); setMsg(""); }} className="shrink-0 text-neutral-300 underline">Religar</button>
+        </div>
       ) : stage === 0 ? (
         <div className="flex items-center gap-2">
           <span className="min-w-0 flex-1 font-semibold text-[#FFC107]">Sem nuvem: o que criar aqui fica só neste telemóvel.</span>

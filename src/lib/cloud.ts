@@ -54,6 +54,7 @@ const errText = async (r: Response, fallback: string) => {
     if (/rate|limit/.test(m)) return "Muitos pedidos seguidos. Aguarde um minuto e tente de novo.";
     if (/smtp|email.*(send|sending)|error sending/.test(m)) return "Não foi possível enviar o email agora. A nossa equipa já foi avisada — tente mais tarde.";
   } catch { /* ignora */ }
+return `${fallback} (HTTP ${r.status})`;
   return fallback;
 };
 export const OFFLINE_MSG = "Sem ligação à internet. Ligue-se e tente de novo.";
