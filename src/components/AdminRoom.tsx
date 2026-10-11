@@ -740,34 +740,48 @@ function CloudBar({ g, onPublished }: { g: GlobalAdm; onPublished: () => void })
   const [on, setOn] = useState(() => hasSession(ADM_EMAIL));
   const [stage, setStage] = useState(0); const [code, setCode] = useState(""); const [msg, setMsg] = useState(""); const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(() => admDirty());
-  if (!cloudOn()) return null;
   const send = async () => { setBusy(true); setMsg(""); const r = await sendCode(ADM_EMAIL); setBusy(false); if (!r.ok) return setMsg(r.error); setStage(1); setMsg(`Código enviado para ${ADM_EMAIL}.`); };
   const check = async () => {
     setBusy(true); setMsg("");
     const v = await verifyCode(ADM_EMAIL, code);
-    if (!v.ok) { setBusy(false); return setMsg(v.error); }
+    if (!v.ok) { setBusy(false); setCode(""); return setMsg(v.error); }
     const ok = await pushGlobalUp(g); setBusy(false);
-    setOn(ok); setStage(0); setCode(""); setDirty(!ok);
-    setMsg(ok ? "Dados publicados com sucesso na nuvem." : (lastPublishError || "Sessão confirmada, mas não foi possível publicar os dados. Tente novamente."));
-    if (ok) onPublished();
+    setOn(true); setStage(0); setCode(""); setDirty(!ok);
+    try { localStorage.removeItem("cjg-adm-codets"); } catch { /* ignora */ }
+    if (ok) onPublished(); else setMsg(lastPublishError || "Ligado. A publicar assim que houver rede.");
   };
+  /* liga sozinho: envia o código ao abrir a Sala do ADM (no máximo 1 vez em 10 min) */
+  useEffect(() => {
+    if (!cloudOn() || on) return;
+    let last = 0; try { last = Number(localStorage.getItem("cjg-adm-codets") || 0); } catch { /* ignora */ }
+    if (Date.now() - last < 10 * 60 * 1000) { setStage(1); return; }
+    try { localStorage.setItem("cjg-adm-codets", String(Date.now())); } catch { /* ignora */ }
+    void send();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /* confirma sozinho quando os 6 dígitos estão escritos */
+  useEffect(() => { if (code.length === 6 && !busy) void check(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [code]);
+  /* alterações por publicar: volta a tentar sozinho */
+  useEffect(() => {
+    if (!on || !dirty) return;
+    const iv = setInterval(async () => { const ok = await pushGlobalUp(loadGlobalAdm()); if (ok) { setDirty(false); setMsg(""); onPublished(); } }, 15000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [on, dirty]);
+  if (!cloudOn()) return null;
+  if (on && !dirty) return null;
   return (
-    <div className={cn("mx-3 mt-2 rounded-xl border px-3 py-2 text-[11.5px]", on && !dirty ? "border-[#00FF88]/35 bg-[#00FF88]/[0.07]" : "border-[#FFC107]/40 bg-[#FFC107]/10")}>
+    <div className="mx-3 mt-2 rounded-xl border border-[#FFC107]/40 bg-[#FFC107]/10 px-3 py-2 text-[11.5px]">
       {on ? (
-        <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 font-semibold text-[#00FF88]">{dirty ? "Nuvem ligada, mas há alterações por publicar." : "Nuvem ligada — publica para todos."}</span>
-          {dirty && <button onClick={async () => { const ok = await pushGlobalUp(loadGlobalAdm()); setDirty(!ok); setMsg(ok ? "Publicado com sucesso na nuvem." : (lastPublishError || "Não foi possível publicar agora.")); }} className="rounded-lg bg-[#FFC107] px-2 py-1 font-extrabold uppercase text-black">Publicar</button>}
-          <button onClick={() => { signOutCloud(ADM_EMAIL); setOn(false); }} className="text-neutral-400 underline">Sair</button>
-        </div>
+        <p className="font-semibold text-[#FFC107]">A publicar as alterações… tenta sozinho quando houver rede.</p>
       ) : stage === 0 ? (
         <div className="flex items-center gap-2">
-          <span className="min-w-0 flex-1 font-semibold text-[#FFC107]">Sem nuvem: o que criar aqui fica só neste telemóvel.</span>
-          <button disabled={busy} onClick={() => void send()} className="shrink-0 rounded-lg bg-[#FFC107] px-2.5 py-1.5 font-extrabold uppercase text-black disabled:opacity-50">{busy ? "…" : "Ligar à nuvem"}</button>
+          <span className="min-w-0 flex-1 font-semibold text-[#FFC107]">{busy ? "A enviar o código para o email do ADM…" : "Sem ligação: o que criar fica só neste telemóvel."}</span>
+          {!busy && msg && <button onClick={() => void send()} className="shrink-0 text-neutral-300 underline">Tentar de novo</button>}
         </div>
       ) : (
         <div className="flex items-center gap-2">
-          <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="Código do email" className={cn(fieldCls, "py-1.5 text-center tracking-widest")} />
-          <button disabled={busy || code.length !== 6} onClick={() => void check()} className="shrink-0 rounded-lg bg-[#00E5FF] px-3 py-1.5 font-extrabold uppercase text-black disabled:opacity-50">{busy ? "…" : "Confirmar"}</button>
+          <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="Código do email (6 dígitos)" className={cn(fieldCls, "py-1.5 text-center tracking-widest")} />
         </div>
       )}
       {msg && <p className="mt-1 text-neutral-300">{msg}</p>}
