@@ -364,7 +364,7 @@ export async function syncGlobalDown() {
   saveGlobalAdm({
     ...base, ...g,
     ads: Array.isArray(g.ads) ? g.ads : [], rooms: Array.isArray(g.rooms) ? g.rooms : [], notices: Array.isArray(g.notices) ? g.notices : [],
-    managers: Array.isArray(g.managers) ? g.managers : base.managers, memories: Array.isArray(g.memories) ? g.memories : [], games: Array.isArray(g.games) ? g.games : [],
+    managers: Array.isArray(g.managers) ? g.managers : base.managers, memories: Array.isArray(g.memories) ? g.memories : [], games: Array.isArray(g.games) ? g.games : [], blockScreen: (g as { blockScreen?: { title: string; text: string; image: string; whatsapp: string } }).blockScreen,
   });
   setStamp(GKEY, row.updated_at);
 }
