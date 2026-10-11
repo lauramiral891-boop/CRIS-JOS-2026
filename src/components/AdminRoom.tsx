@@ -23,6 +23,7 @@ import { defaultData, loadAdminFor, loadDataFor, saveAdminFor, saveDataFor, uid 
 import { cn } from "../utils/cn";
 
 type TabId = "block" | "accounts" | "live" | "bill" | "ai" | "ads" | "rooms" | "alerts" | "mgrs" | "mem" | "games";
+const ADM_ONLY = import.meta.env.VITE_APP_MODE === "adm";
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: "live", label: "Painel", icon: Activity }, { id: "accounts", label: "Contas", icon: Users }, { id: "block", label: "Bloqueio", icon: Lock }, { id: "bill", label: "Cobrança", icon: CreditCard }, { id: "ai", label: "IA", icon: Bot },
   { id: "ads", label: "Anúncios", icon: Megaphone }, { id: "rooms", label: "Salas", icon: DoorOpen }, { id: "alerts", label: "Avisos", icon: BellRing },
@@ -782,7 +783,7 @@ function CloudBar({ g, onPublished }: { g: GlobalAdm; onPublished: () => void })
 /* ---------------- sala ---------------- */
 export default function AdminRoom({ onClose }: { onClose: () => void }) {
   const [unlocked, setUnlocked] = useState(false);
-  const [tab, setTab] = useState<TabId>("live");
+  const [tab, setTab] = useState<TabId>(ADM_ONLY ? "accounts" : "live");
   const [g, setG] = useState<GlobalAdm>(() => loadGlobalAdm());
   const [warn, setWarn] = useState("");
   const [now, setNow] = useState(() => Date.now());
@@ -860,7 +861,7 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
       {!unlocked ? <Gate onUnlock={() => setUnlocked(true)} /> : (
         <>
           <div className="no-scrollbar flex gap-1.5 overflow-x-auto border-b border-white/[0.06] px-3 py-2">
-            {TABS.map((t) => (
+            {TABS.filter((t) => !ADM_ONLY || !["live", "bill", "ai"].includes(t.id)).map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)} className={cn("relative flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-bold", tab === t.id ? "bg-[#00E5FF] text-black" : "bg-white/[0.06] text-neutral-300")}>
                 <t.icon size={13} />{t.label}
                 {t.id === "bill" && pending > 0 && <span className="grid h-4 min-w-4 place-items-center rounded-full bg-[#FF4D6D] px-1 text-[9px] text-white">{pending}</span>}

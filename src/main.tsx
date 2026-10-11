@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import Root from "./Root";
+import AdmApp from "./AdmApp";
 import { initNotifications } from "./lib/push";
 
 void initNotifications();
@@ -21,6 +22,6 @@ try {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Root />
+    {import.meta.env.VITE_APP_MODE === "adm" ? <AdmApp /> : <Root />}
   </StrictMode>
 );
