@@ -108,7 +108,7 @@ export async function askOnline(
           history: history.slice(-8),
           system,
           search: needsSearch,
-          maxOutputTokens: opts?.maxTokens ?? 700,
+          maxOutputTokens: opts?.maxTokens ?? 1500,
           temperature: opts?.temperature ?? 0.35
         })
       });
