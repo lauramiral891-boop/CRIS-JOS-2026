@@ -134,7 +134,8 @@ export async function askOnline(
         }
         if (needsSearch) throw new Error(result.error || "A pesquisa não devolveu uma resposta.");
       } else if (needsSearch) {
-        throw new Error("Pesquisa Google indisponível (HTTP " + geminiRes.status + ").");
+        const eb = (await geminiRes.json().catch(() => ({}))) as { error?: string };
+      throw new Error("Pesquisa Google indisponível (HTTP " + geminiRes.status + ")" + (eb.error ? ": " + String(eb.error).slice(0, 220) : "") + ".");
       }
     } catch (error) {
       if (needsSearch || signal.aborted) throw error;
