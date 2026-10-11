@@ -194,6 +194,7 @@ export default function AssistantView({
     const help = wantsHuman || !!humanCat;
     const patch = (text: string, extra?: Partial<Msg>) => setMsgs((m) => m.map((x) => (x.id === aid ? { ...x, text, ...extra } : x)));
     const history = [...msgsRef.current.filter((m) => !m.streaming && m.text).map((m) => ({ role: m.role, content: m.text })), { role: "user" as const, content: q }];
+    let why = "";
     const done = (text: string, source: NonNullable<Msg["source"]>, extra?: Partial<Msg>) => patch(text, { streaming: false, source, help, topic: q, ...extra });
 
     try {
@@ -207,13 +208,14 @@ export default function AssistantView({
         const ctrl = new AbortController();
         abortRef.current = ctrl;
         let acc = "";
-        await askOnline(history, buildSystemPrompt(ctx, q, mem), config.aiKey, (d) => { acc += d; patch(acc); }, ctrl.signal);
+        try { await askOnline(history, buildSystemPrompt(ctx, q, mem), config.aiKey, (d) => { acc += d; patch(acc); }, ctrl.signal); } catch (e) { why = e instanceof Error ? e.message : String(e); throw e; }
         done(acc, "online");
         if (voiceRef.current && aliveRef.current) say(aid, acc);
       }
     } catch {
       if (!aliveRef.current) return;
-      const text = friendly(local?.text ?? fallbackAnswer(ctx));
+      const base = friendly(local?.text ?? fallbackAnswer(ctx));
+    const text = why && !/abort/i.test(why) ? base + "\n\n(IA online indisponível: " + why + ")" : base;
       await typeOut(text, (t) => patch(t));
       done(text, local?.kind === "memory" ? "memory" : "local", { help: help || !local });
       if (voiceRef.current && aliveRef.current) say(aid, text);
