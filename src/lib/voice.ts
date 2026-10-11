@@ -1,8 +1,11 @@
 /* Voz do assistente: lê as respostas em voz alta com a voz do próprio telemóvel (sem internet, sem custo). */
 import { getNamespace } from "./storage";
+import { Capacitor } from "@capacitor/core";
+import { TextToSpeech } from "@capacitor-community/text-to-speech";
 
 const synth = (): SpeechSynthesis | null => (typeof window !== "undefined" && "speechSynthesis" in window ? window.speechSynthesis : null);
-export const voiceSupported = () => !!synth();
+const isNative = () => Capacitor.isNativePlatform();
+export const voiceSupported = () => isNative() || !!synth();
 
 const prefKey = () => `cjg-voice:${getNamespace()}`;
 export const voiceEnabled = (): boolean => {
@@ -65,12 +68,22 @@ let token = 0;
 export function stopVoice() {
   token++;
   synth()?.cancel();
+  if (isNative()) void TextToSpeech.stop().catch(() => {});
 }
 
 /** Fala o texto. `onEnd` corre quando termina (ou é interrompido). */
 export function speak(raw: string, onEnd?: () => void) {
   const s = synth();
   const text = speakable(raw);
+  if (isNative()) {
+    if (!text) { onEnd?.(); return; }
+    const my0 = ++token;
+    TextToSpeech.stop().catch(() => {})
+      .then(() => TextToSpeech.speak({ text, lang: "pt-PT", rate: 1.0, pitch: 1.1, volume: 1.0, category: "ambient" }))
+      .then(() => { if (my0 === token) onEnd?.(); })
+      .catch(() => { if (my0 === token) onEnd?.(); });
+    return;
+  }
   if (!s || !text) { onEnd?.(); return; }
   s.cancel();
   const my = ++token;
