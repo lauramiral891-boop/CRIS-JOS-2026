@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Cloud, CloudOff } from "lucide-react";
 import Sheet from "./Sheet";
 import { ErrorBox, PrimaryButton, fieldCls } from "./ui";
@@ -23,15 +23,6 @@ export default function CloudSheet({ onClose }: { onClose: () => void }) {
     const pushed = await pushAccount(acc!.id, true); setBusy(false);
     setOn(true); setStage(0); setCode(""); setOk(pushed ? "Conta ligada e dados guardados na nuvem." : "Ligado, mas não foi possível guardar agora. Tente «Sincronizar agora».");
   };
-  useEffect(() => {
-    if (!cloudOn() || !email || on) return;
-    let last = 0; try { last = Number(localStorage.getItem("cjg-owner-codets") || 0); } catch { /* ignora */ }
-    if (Date.now() - last < 10 * 60 * 1000) { setStage(1); return; }
-    try { localStorage.setItem("cjg-owner-codets", String(Date.now())); } catch { /* ignora */ }
-    void send();
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, []);
-  useEffect(() => { if (code.length === 6 && !busy && stage === 1) void verify(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [code]);
   const sync = async () => { setBusy(true); setErr(""); const r = await pushAccount(acc!.id, true); setBusy(false); if (r) setOk("Dados guardados na nuvem."); else setErr("Não foi possível sincronizar. Verifique a internet."); };
 
   return (
@@ -51,14 +42,12 @@ export default function CloudSheet({ onClose }: { onClose: () => void }) {
         ) : stage === 0 ? (
           <>
             <p className="text-[12.5px] leading-relaxed text-neutral-300">Enviamos um código para <b>{email}</b> para confirmar que é você. Depois os seus dados ficam guardados na nuvem e pode recuperá-los se mudar de telemóvel.</p>
-            <p className="text-center text-[12px] font-semibold text-[#FFC107]">{busy ? "A enviar o código para o seu email…" : "A preparar a ligação…"}</p>
-                <button onClick={() => void send()} className="w-full text-center text-[12px] text-neutral-500 underline">Enviar o código de novo</button>
+            <PrimaryButton tone="cyan" disabled={busy} onClick={() => void send()}>{busy ? "A enviar…" : "Enviar código por email"}</PrimaryButton>
           </>
         ) : (
           <>
             <input value={code} onChange={(e) => { setCode(e.target.value.replace(/\D/g, "").slice(0, 6)); setErr(""); }} inputMode="numeric" autoFocus placeholder="000000" className={`${fieldCls} text-center font-display text-[28px] font-extrabold tracking-[0.4em]`} />
-            <p className="text-center text-[12px] text-neutral-400">{busy ? "A confirmar…" : "Escreva os 6 dígitos: liga sozinho."}</p>
-                <button onClick={() => void send()} className="w-full text-center text-[12px] text-neutral-500 underline">Enviar o código de novo</button>
+            <PrimaryButton tone="cyan" disabled={busy || code.length !== 6} onClick={() => void verify()}>{busy ? "A confirmar…" : "Confirmar e ligar"}</PrimaryButton>
           </>
         )}
         <ErrorBox msg={err} />
