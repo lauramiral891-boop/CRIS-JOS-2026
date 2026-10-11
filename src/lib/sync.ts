@@ -372,7 +372,7 @@ export async function syncGlobalDown() {
 /** ADM: publica o conteúdo para todos. Se falhar (sem net/sem sessão), fica marcado para não ser apagado. */
 export async function pushGlobalUp(g: GlobalAdm): Promise<boolean> {
   lastPublishError = "";
-  if (!cloudOn()) return true;
+  if (!cloudOn()) { lastPublishError = "Nuvem não configurada. Verifique as variáveis do Supabase."; setDirty(true); return false; }
   if (!hasSession(ADM_EMAIL)) { setDirty(true); return false; }
   const r = await globalPush(g);
   if (r.ok) { lastPublishError = ""; setStamp(GKEY, r.data); setDirty(false); return true; }

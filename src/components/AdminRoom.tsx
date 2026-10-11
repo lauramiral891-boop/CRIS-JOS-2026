@@ -13,7 +13,7 @@ import { billInfo, confirmPayment, newPayment, rejectPayment, DAY } from "../lib
 import { admLogin, loadGlobalAdm, loadUnknown, saveGlobalAdm, saveUnknown } from "../lib/adm";
 import { BASE } from "../lib/brain";
 import { ADM_EMAIL, cloudOn, hasSession, sendCode, verifyCode, signOutCloud, licenseRequest } from "../lib/cloud";
-import { admDirty, lastPublishError, pushGlobalUp } from "../lib/sync";
+import { admDirty, lastPublishError, pushGlobalUp, syncGlobalDown } from "../lib/sync";
 import { waLink } from "./BillingUI";
 import { loadAccounts } from "../lib/accounts";
 import { fileToImage } from "../lib/image";
@@ -707,7 +707,9 @@ function CloudBar({ g, onPublished }: { g: GlobalAdm; onPublished: () => void })
     const v = await verifyCode(ADM_EMAIL, code);
     if (!v.ok) { setBusy(false); return setMsg(v.error); }
     const ok = await pushGlobalUp(g); setBusy(false);
-    setOn(true); setStage(0); setCode(""); setDirty(!ok); setMsg(ok ? "Ligado! Tudo o que fizer aqui chega a todos os telemóveis." : (lastPublishError || "Não foi possível publicar agora.")); onPublished();
+    setOn(ok); setStage(0); setCode(""); setDirty(!ok);
+    setMsg(ok ? "Dados publicados com sucesso na nuvem." : (lastPublishError || "Sessão confirmada, mas não foi possível publicar os dados. Tente novamente."));
+    if (ok) onPublished();
   };
   return (
     <div className={cn("mx-3 mt-2 rounded-xl border px-3 py-2 text-[11.5px]", on && !dirty ? "border-[#00FF88]/35 bg-[#00FF88]/[0.07]" : "border-[#FFC107]/40 bg-[#FFC107]/10")}>
@@ -750,7 +752,7 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
   useEffect(() => { reload(houseId); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [houseId]);
   useEffect(() => {
     if (!unlocked) return;
-    const iv = setInterval(() => { setNow(Date.now()); if (tab === "live") reload(); }, 2000);
+    let ticks = 0; const iv = setInterval(() => { setNow(Date.now()); if (tab === "live") reload(); if (++ticks % 3 === 0) void syncGlobalDown().then(() => { if (!admDirty()) setG(loadGlobalAdm()); }); }, 2000);
     return () => clearInterval(iv);
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
   }, [unlocked, tab, houseId]);
