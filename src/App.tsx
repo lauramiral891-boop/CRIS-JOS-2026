@@ -325,6 +325,16 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
   /* Nuvem: sincronização ao vivo entre o telemóvel do proprietário e o dos funcionários.
      Envia as alterações logo a seguir, traz as do outro telemóvel de 10 em 10 s e funde as duas. */
+  const [srvBlocked, setSrvBlocked] = useState(() => { try { return localStorage.getItem(`cjg-blocked:${account.id}`) === "1"; } catch { return false; } });
+  useEffect(() => {
+    const h = (e: Event) => {
+      const v = !!(e as CustomEvent<boolean>).detail;
+      setSrvBlocked(v);
+      try { if (v) localStorage.setItem(`cjg-blocked:${account.id}`, "1"); else localStorage.removeItem(`cjg-blocked:${account.id}`); } catch { /* ignora */ }
+    };
+    window.addEventListener("cj-blocked", h);
+    return () => window.removeEventListener("cj-blocked", h);
+  }, [account.id]);
   const live = useLiveSync({
     account,
     getSnap: (): Snap => ({
@@ -1002,7 +1012,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
           {needSetup ? (
             <SetupWizard account={account} onFinish={finishSetup} onBack={onExit} />
-          ) : bill.status === "blocked" ? (
+          ) : (bill.status === "blocked" || srvBlocked) ? (
             <Paywall admin={admin} houseName={config.houseName} isOwner={isOwner} onSubmit={submitPayment} onRedeem={redeemCode} />
           ) : (
             <>

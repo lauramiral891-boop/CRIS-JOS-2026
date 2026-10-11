@@ -212,6 +212,7 @@ export interface HouseGet { ok: boolean; error?: string; exists?: boolean; rev?:
 /** Lê a casa. Se «knownRev» for a versão atual, devolve só `changed: false` (pedido muito leve). */
 export async function houseGet(email: string, knownRev: number | null): Promise<Res<HouseGet>> {
   const r = await rpc<HouseGet>("house_get", { p_known_rev: knownRev }, email);
+  if (r.ok && typeof window !== "undefined") { if (r.data.error === "blocked") window.dispatchEvent(new CustomEvent("cj-blocked", { detail: true })); else if (r.data.ok) window.dispatchEvent(new CustomEvent("cj-blocked", { detail: false })); }
   if (!r.ok) return r;
   if (!r.data.ok) return { ok: false, error: r.data.error === "auth" ? "Sem sessão na nuvem." : r.data.error === "blocked" ? "BLOQUEADO" : "Não foi possível ler da nuvem." };
   return r;
