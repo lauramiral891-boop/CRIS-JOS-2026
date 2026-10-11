@@ -89,6 +89,7 @@ export async function askOnline(
   const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "").trim();
   const email = lastCloudEmail();
   const accessToken = email ? await getCloudAccessToken(email) : null;
+  let geminiWhy = !email ? "sem email da nuvem" : !accessToken ? "sem sessão da nuvem (ligue a conta online)" : "";
 
   if (needsSearch && (!supabaseUrl || !supabaseKey || !accessToken)) {
     throw new Error("Pesquisa Google requer uma sessão Supabase válida.");
@@ -113,6 +114,10 @@ export async function askOnline(
         })
       });
 
+      if (!geminiRes.ok && !needsSearch) {
+        const eb0 = (await geminiRes.json().catch(() => ({}))) as { error?: string };
+        geminiWhy = "HTTP " + geminiRes.status + (eb0.error ? " - " + String(eb0.error).slice(0, 160) : "");
+      }
       if (geminiRes.ok) {
         const result = await geminiRes.json() as {
           text?: string;
@@ -139,6 +144,7 @@ export async function askOnline(
       }
     } catch (error) {
       if (needsSearch || signal.aborted) throw error;
+      geminiWhy = error instanceof Error ? error.message : String(error);
       // Para perguntas comuns, tenta o fornecedor anterior se o Gemini falhar.
     }
   }
@@ -174,7 +180,7 @@ export async function askOnline(
         max_tokens: opts?.maxTokens ?? 700,
       }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}` + (geminiWhy ? ` | Gemini: ${geminiWhy}` : ""));
     const ct = res.headers.get("content-type") ?? "";
 
     if (ct.includes("application/json") || !res.body) {

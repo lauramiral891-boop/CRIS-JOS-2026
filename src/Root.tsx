@@ -22,6 +22,7 @@ export default function Root() {
 
   useEffect(() => {
     if (session) return;
+    try { if (localStorage.getItem("cjg-signed-out") === "1") return; } catch { /* ignora */ }
     const email = lastCloudEmail();
     if (!email) return;
     let cancelled = false;
@@ -50,6 +51,7 @@ export default function Root() {
   }, []);
 
   const enter = (s: Session) => {
+    try { localStorage.removeItem("cjg-signed-out"); } catch { /* ignora */ }
     setNamespace(s.accountId);
     saveSession(s);
     setAccount(getAccount(s.accountId));
@@ -58,6 +60,7 @@ export default function Root() {
   };
 
   const exit = () => {
+    try { localStorage.setItem("cjg-signed-out", "1"); } catch { /* ignora */ }
     saveSession(null);
     setNamespace("");
     setSession(null);
