@@ -13,6 +13,8 @@ import StockRoom from "./components/StockRoom";
 import GamesRoom from "./components/GamesRoom";
 import SalesView, { type CartLine } from "./components/SalesView";
 import AssistantView from "./components/AssistantView";
+import OnboardingGuide from "./components/OnboardingGuide";
+import FloatingGuideBot from "./components/FloatingGuideBot";
 import PdfShareSheet from "./components/PdfShareSheet";
 import MyCashCard, { todaysOf } from "./components/MyCashCard";
 import StaffManager, { type NewStaff } from "./components/StaffManager";
@@ -112,6 +114,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   const [showGoal, setShowGoal] = useState(false);
   const [showSales, setShowSales] = useState(false);
   const [showAI, setShowAI] = useState(false);
+  const [guideTrigger, setGuideTrigger] = useState(0);
   const [pdfSheet, setPdfSheet] = useState<{ open: boolean; report: Report | null; own?: boolean }>({ open: false, report: null });
   const [reports, setReports] = useState<{ open: boolean; kind: ReportTab }>({ open: false, kind: "day" });
   const [startModal, setStartModal] = useState<{ open: boolean; stationId: number | null }>({ open: false, stationId: null });
@@ -1246,6 +1249,8 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
           {room && <RoomView room={room} onClose={() => setRoom(null)} />}
           {showGames && <GamesRoom games={gadm.games.filter((x) => x.active)} onClose={() => setShowGames(false)} />}
+      <OnboardingGuide userKey={String(account.id)} tab={tab} onNavigate={setTab} isOwner={isOwner} room={room} openTrigger={guideTrigger} />
+      <FloatingGuideBot onStartGuide={() => setGuideTrigger((v) => v + 1)} onOpenAI={() => setShowAI(true)} isOwner={isOwner} />
 
           <div className="pointer-events-none absolute inset-x-4 bottom-28 z-[80] flex flex-col gap-2">
             {toasts.map((t) => (
