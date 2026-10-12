@@ -196,6 +196,9 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   const balance =
     config.openingBalance +
     transactions.reduce((a, t) => a + (t.type === "in" ? t.value : -t.value), 0);
+  const houseBalance =
+    config.openingBalance +
+    filterScope(transactions, "house").reduce((a, t) => a + (t.type === "in" ? t.value : -t.value), 0);
   const unread = notifications.filter((n) => !n.read).length;
   const ringSession = sessions.find((s) => s.id === ringing[0]);
   const loggedIn = isOwner || !!me;
@@ -1010,7 +1013,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
         </p>
         {config.setupDone && loggedIn && (
           <div className="mt-5 space-y-2 text-[12px] font-semibold text-neutral-300">
-            {[`${sessions.length}/${stations.length} máquinas ativas agora`, `${formatAOAshort(balance)} em caixa`].map((t) => (
+            {[`${sessions.length}/${stations.length} máquinas ativas agora`, `${formatAOAshort(houseBalance)} em caixa`].map((t) => (
               <div key={t} className="flex items-center gap-2"><CheckCircle2 size={14} className="text-[#00FF88]" /> {t}</div>
             ))}
           </div>
@@ -1062,7 +1065,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                 {tab === "home" && (
                   <HomeScreen
                     config={can("finance") ? config : { ...config, dailyGoal: 0 }} stations={stations} sessions={sessions}
-                    transactions={can("finance") ? transactions : []}
+                    transactions={can("finance") ? filterScope(transactions, "house") : []}
                     bookings={bookings} inventory={inventory} now={now}
                     onQuick={handleQuick} onExtend={g("sessions", extendSession)} onEnd={g("sessions", endSession)} onSetStatus={g("sessions", setStationStatus)}
                     onStartOn={g("sessions", (id: number) => setStartModal({ open: true, stationId: id }))}
