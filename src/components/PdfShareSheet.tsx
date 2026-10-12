@@ -6,7 +6,7 @@ import { Download, Eye, FileText, Minus, Plus, Send, Share2 } from "lucide-react
 import Sheet from "./Sheet";
 import { ErrorBox, labelCls, fieldCls } from "./ui";
 import type { Config, PdfCaseKey, PdfFontKey, Tone, Transaction } from "../lib/types";
-import type { Report } from "../lib/reports";
+import { buildReport, filterScope, type Report } from "../lib/reports";
 import { buildReportPdf, dayName, fmtDate, fmtTime, kindLabels, pdfFileName, reportSummaryText } from "../lib/pdf";
 import { formatAOAshort } from "../lib/format";
 import { cn } from "../utils/cn";
@@ -62,9 +62,9 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
   const font = fonts.find((f) => f.id === config.pdfFont) ?? fonts[0];
   const now = new Date();
   const sc = (report as { scope?: string } | null)?.scope;
-  const txs = sc === 'games' ? allTxs.filter((t) => ["sessao", "extensao", "recarga"].includes(t.category))
-    : sc === 'sales' ? allTxs.filter((t) => ["venda", "servico"].includes(t.category))
-    : allTxs;
+  const [scopeKey, setScopeKey] = useState<'house' | 'sales'>(sc === 'sales' ? 'sales' : 'house');
+  const txs = ownCash ? allTxs : filterScope(allTxs, scopeKey);
+  const scopedReport: Report | null = report && !ownCash ? ({ ...buildReport(report.kind, report.from, txs, new Date()), scope: scopeKey } as Report) : report;
 
   const waDigits = (): string => {
     const raw = waNumber.trim();
@@ -81,7 +81,7 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
     if (!report) throw new Error("sem relatório");
     const stamp = new Date();
     const doc = buildReportPdf({
-      report, txs, config, now: stamp, who,
+      report: scopedReport as Report, txs, config, now: stamp, who,
       opts: { font: config.pdfFont, size: config.pdfSize, textCase: config.pdfCase },
     });
     return { doc, stamp, name: pdfFileName(config.houseName, report) };
@@ -131,7 +131,7 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
   /** Abre a partilha do telemóvel com o PDF já anexado (escolha o WhatsApp). */
   const shareFile = async (): Promise<"shared" | "cancelled" | "unsupported"> => {
     const { doc, stamp, name } = make();
-    const text = reportSummaryText(report!, config, stamp, who);
+    const text = reportSummaryText(scopedReport!, config, stamp, who);
     try {
       if (Capacitor.isNativePlatform()) {
         const data = doc.output("datauristring").split(",")[1];
@@ -177,7 +177,7 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
       if (!validNumber) return setErr("Este aparelho não anexa o PDF automaticamente. Escreva o número do destinatário para abrir a conversa.");
       const { doc, stamp, name } = make();
       doc.save(name);
-      const url = `https://wa.me/${digits}?text=${encodeURIComponent(reportSummaryText(report, config, stamp, who))}`;
+      const url = `https://wa.me/${digits}?text=${encodeURIComponent(reportSummaryText(scopedReport!, config, stamp, who))}`;
       const w = window.open(url, "_blank");
       if (!w) window.location.href = url;
       toast("PDF guardado", "Na conversa do WhatsApp toque em 📎 → Documento e escolha o PDF.", "amber");
@@ -190,7 +190,7 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
   const sendTextOnly = () => {
     if (!report) return;
     if (!validNumber) return setErr("Escreva o número de WhatsApp do destinatário (ex: 923 000 000).");
-    const url = `https://wa.me/${digits}?text=${encodeURIComponent(reportSummaryText(report, config, new Date(), who))}`;
+    const url = `https://wa.me/${digits}?text=${encodeURIComponent(reportSummaryText(scopedReport!, config, new Date(), who))}`;
     const w = window.open(url, "_blank");
     if (!w) window.location.href = url;
     setErr("");
@@ -213,11 +213,19 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#00E5FF]/15 text-[#00E5FF]"><FileText size={19} /></span>
             <div className="min-w-0">
               <p className="truncate text-[13px] font-bold">{kindLabels[report.kind]} • {report.title}</p>
-              <p className="text-[11.5px] text-neutral-400">Receita {formatAOAshort(report.totals.income)} • Lucro {formatAOAshort(report.totals.net)}</p>
+              <p className="text-[11.5px] text-neutral-400">Receita {formatAOAshort(scopedReport!.totals.income)} • Lucro {formatAOAshort(scopedReport!.totals.net)}</p>
             </div>
           </div>
         ) : (
           <p className="rounded-xl border border-dashed border-white/15 p-3 text-center text-[12.5px] text-neutral-500">Abra um relatório em Finanças → Ver Relatórios para o enviar.</p>
+        )}
+
+        {report && !ownCash && (
+          <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#1e1e1e] p-1.5">
+            {(["house", "sales"] as const).map((k) => (
+              <button key={k} onClick={() => setScopeKey(k)} className={cn("rounded-xl py-2.5 text-[12px] font-extrabold uppercase tracking-wider transition", scopeKey === k ? "bg-[#00FF88] text-black" : "text-neutral-500")}>{k === "house" ? "Game House" : "Outras vendas"}</button>
+            ))}
+          </div>
         )}
 
         {/* Número */}
@@ -283,7 +291,7 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
           <span className={labelCls}>Pré-visualização (A4)</span>
           <div className="rounded-lg bg-white px-3 py-4 shadow-inner" style={sampleStyle}>
             <div style={{ fontWeight: 700, fontSize: "1.45em" }}>{config.houseName || "Game House"}</div>
-            <div style={{ color: "#006f84", fontWeight: 700 }}>Relatório Financeiro</div>
+            <div style={{ color: "#2fbf1f", fontWeight: 700 }}>{scopeKey === "sales" ? "Relatório de Outras Vendas" : "Relatório Game House"}</div>
             <div style={{ marginTop: 6, borderTop: "1px solid #bbb", paddingTop: 6 }}>
               {dayName(now)} • {fmtDate(now)} • {fmtTime(now)}
             </div>

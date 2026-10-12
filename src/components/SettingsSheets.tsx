@@ -1,3 +1,4 @@
+import DEFAULT_LOGO from "../lib/logoDefault";
 import { useRef, useState } from "react";
 import { fileToPhoto } from "../lib/image";
 import {
@@ -21,13 +22,17 @@ export function ProfileSheet({
   const [f, setF] = useState({
     houseName: config.houseName, ownerName: config.ownerName, phone: config.phone,
     email: config.email, address: config.address,
+    logo: config.logo ?? "", company: config.company ?? "", tagline: config.tagline ?? "", nif: config.nif ?? "",
+    bankName: config.bankName ?? "", iban: config.iban ?? "", accountHolder: config.accountHolder ?? "", ivaRate: config.ivaRate ?? 14,
   });
   const [err, setErr] = useState("");
-  const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
+  const set = (k: keyof typeof f, v: string | number) => setF((p) => ({ ...p, [k]: v }));
   const save = () => {
     if (!f.houseName.trim() || !f.ownerName.trim()) return setErr("Nome da Game House e do proprietário são obrigatórios.");
     if (!photo) return setErr("A foto da Game House é obrigatória.");
-    onSave({ houseName: f.houseName.trim(), ownerName: f.ownerName.trim(), phone: f.phone.trim(), email: f.email.trim(), address: f.address.trim() }, photo);
+    onSave({ houseName: f.houseName.trim(), ownerName: f.ownerName.trim(), phone: f.phone.trim(), email: f.email.trim(), address: f.address.trim(),
+      logo: f.logo || undefined, company: f.company.trim() || undefined, tagline: f.tagline.trim() || undefined, nif: f.nif.trim() || undefined,
+      bankName: f.bankName.trim() || undefined, iban: f.iban.trim() || undefined, accountHolder: f.accountHolder.trim() || undefined, ivaRate: f.ivaRate }, photo);
   };
   return (
     <Sheet title="Informações do Perfil" subtitle="Os seus dados e os da Game House." onClose={onClose}>
@@ -42,6 +47,37 @@ export function ProfileSheet({
           <p className="text-[11.5px] text-neutral-400">Foto da Game House (obrigatória). Aparece também na sala dos seus funcionários.</p>
         </div>
         <Field label="Nome da Game House"><input value={f.houseName} onChange={(e) => set("houseName", e.target.value)} className={fieldCls} /></Field>
+        <Field label="Logotipo (PDFs e faturas)">
+          <div className="flex items-center gap-3">
+            <img src={f.logo || DEFAULT_LOGO} alt="" className="h-14 w-14 rounded-full border-2 border-[#00FF88] object-cover" />
+            <label className="cursor-pointer rounded-xl border border-white/15 px-3 py-2 text-[12px] font-bold text-neutral-200">
+              Mudar logotipo
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                  const c = document.createElement("canvas");
+                  c.width = 300; c.height = 300;
+                  const m = Math.min(img.width, img.height);
+                  c.getContext("2d")!.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, 300, 300);
+                  set("logo", c.toDataURL("image/jpeg", 0.8));
+                  URL.revokeObjectURL(url);
+                };
+                img.src = url;
+              }} />
+            </label>
+            {f.logo ? <button type="button" onClick={() => set("logo", "")} className="text-[11px] font-bold text-neutral-400 underline">Repor original</button> : null}
+          </div>
+        </Field>
+        <Field label="Nome na fatura"><input value={f.company ?? ""} onChange={(e) => set("company", e.target.value)} placeholder="Ex: CrisJose Gamers" className={fieldCls} /></Field>
+        <Field label="Subtítulo"><input value={f.tagline ?? ""} onChange={(e) => set("tagline", e.target.value)} placeholder="Gerenciamento de Máquinas" className={fieldCls} /></Field>
+        <Field label="NIF"><input value={f.nif ?? ""} onChange={(e) => set("nif", e.target.value)} placeholder="" className={fieldCls} /></Field>
+        <Field label="Banco"><input value={f.bankName ?? ""} onChange={(e) => set("bankName", e.target.value)} placeholder="" className={fieldCls} /></Field>
+        <Field label="IBAN"><input value={f.iban ?? ""} onChange={(e) => set("iban", e.target.value)} placeholder="" className={fieldCls} /></Field>
+        <Field label="Titular da conta"><input value={f.accountHolder ?? ""} onChange={(e) => set("accountHolder", e.target.value)} placeholder="" className={fieldCls} /></Field>
+        <Field label="IVA (%)"><input value={String(f.ivaRate ?? 14)} onChange={(e) => set("ivaRate", parseFloat(e.target.value.replace(",", ".")) || 0)} inputMode="decimal" className={fieldCls} /></Field>
         <Field label="Proprietário"><input value={f.ownerName} onChange={(e) => set("ownerName", e.target.value)} className={fieldCls} /></Field>
         <div className="grid grid-cols-2 gap-2.5">
           <Field label="Telefone"><input value={f.phone} onChange={(e) => set("phone", e.target.value)} inputMode="tel" className={fieldCls} /></Field>

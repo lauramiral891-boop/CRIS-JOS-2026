@@ -74,6 +74,8 @@ export interface Transaction {
   /** quem registou o movimento (funcionário ou proprietário) */
   actorId?: string;
   actorName?: string;
+  /** "sales" = outras vendas; sem valor = Game House */
+  scope?: "house" | "sales";
 }
 
 export type Tone = "green" | "cyan" | "red" | "amber";
@@ -166,6 +168,15 @@ export interface Config {
   pdfCase: PdfCaseKey;
   // Assistente IA (chave opcional)
   aiKey: string;
+  // Dados da empresa para faturas e relatórios (editáveis nas definições)
+  logo?: string; // imagem em data URL; sem valor = logotipo CrisJose
+  nif?: string;
+  bankName?: string;
+  iban?: string;
+  accountHolder?: string;
+  ivaRate?: number; // em %, por defeito 14
+  company?: string; // nome na fatura; sem valor = houseName
+  tagline?: string; // subtítulo, por defeito «Gerenciamento de Máquinas»
 }
 
 /** Permissões que o proprietário pode dar a cada funcionário. */

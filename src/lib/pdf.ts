@@ -1,3 +1,5 @@
+import { drawRoundLogo } from "./pdfLogo";
+import DEFAULT_LOGO from "./logoDefault";
 import { jsPDF } from "jspdf";
 import type { Config, PdfCaseKey, PdfFontKey, Transaction } from "./types";
 import type { Report } from "./reports";
@@ -103,7 +105,6 @@ export function buildReportPdf(a: {
 
   const INK: RGB = [22, 22, 22];
   const GRAY: RGB = [105, 105, 105];
-  const TEAL: RGB = [0, 112, 132];
   const GREEN: RGB = [8, 128, 78];
   const RED: RGB = [190, 40, 60];
 
@@ -176,7 +177,7 @@ export function buildReportPdf(a: {
   const section = (title: string) => {
     ensure(18);
     y += 4;
-    centerText(title, S + 2, "bold", TEAL);
+    centerText(title, S + 2, "bold", [47, 191, 31] as RGB);
     y += 0.5;
     rule(CX - 22, CX + 22, 0);
     y += 4;
@@ -199,7 +200,7 @@ export function buildReportPdf(a: {
         drawRow(header, true, false, true);
       }
       if (head) {
-        doc.setFillColor(226, 236, 240);
+        doc.setFillColor(17, 17, 17);
         doc.rect(x0, y, total, rowH, "F");
       } else if (zebra) {
         doc.setFillColor(246, 248, 249);
@@ -208,7 +209,7 @@ export function buildReportPdf(a: {
       const base = y + rowH / 2 + (S * 0.3528) / 3;
       let x = x0;
       cells.forEach((c, i) => {
-        cell(c, x, widths[i], base, head || bold ? "bold" : "normal", head ? TEAL : INK);
+        cell(c, x, widths[i], base, head || bold ? "bold" : "normal", head ? ([255, 255, 255] as RGB) : INK);
         x += widths[i];
       });
       doc.setDrawColor(215, 215, 215);
@@ -222,10 +223,24 @@ export function buildReportPdf(a: {
   };
 
   /* ------------------------------ Cabeçalho ------------------------------ */
-  centerText(config.houseName || "Game House", S + 10, "bold", INK);
+  const brand = config.company || config.houseName || "Game House";
+  const logoSrc = config.logo || DEFAULT_LOGO;
+  try {
+    const r = 14;
+    const cy = y + r + 1;
+    drawRoundLogo(doc, logoSrc, CX, cy, r);
+    doc.setDrawColor(47, 191, 31);
+    doc.setLineWidth(0.9);
+    doc.circle(CX, cy, r, "S");
+    y += r * 2 + 5;
+  } catch (e) {
+    console.error("Logo PDF:", e);
+  }
+  centerText(brand, S + 10, "bold", [47, 191, 31] as RGB);
+  centerText(config.tagline ?? "Gerenciamento de Máquinas", S, "bold", INK);
   y += 0.5;
-  centerText("Relatório Financeiro", S + 3, "bold", TEAL);
-  const contact = [config.address, config.phone, config.email].filter(Boolean).join("  |  ");
+  centerText((report as { scope?: string }).scope === "sales" ? "Relatório de Outras Vendas" : "Relatório Game House", S + 3, "bold", [47, 191, 31] as RGB);
+  const contact = [config.address, config.phone, config.email, config.nif ? `NIF ${config.nif}` : ""].filter(Boolean).join("  |  ");
   if (contact) centerText(contact, Math.max(7, S - 2), "normal", GRAY);
   y += 2;
   rule();
@@ -326,7 +341,7 @@ export function buildReportPdf(a: {
   const n = doc.getNumberOfPages();
   for (let i = 1; i <= n; i++) {
     doc.setPage(i);
-    doc.setFillColor(0, 150, 170);
+    doc.setFillColor(47, 191, 31);
     doc.rect(0, 0, W, 3.5, "F");
     doc.setDrawColor(170, 170, 170);
     doc.setLineWidth(0.25);

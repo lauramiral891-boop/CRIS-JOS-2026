@@ -225,3 +225,9 @@ export function checkClosedPeriods(prevTs: number, nowTs: number, txs: Transacti
   }
   return out;
 }
+
+/** Separação de contas: vendas/serviços (outras vendas) vs Game House */
+export type Scope = "house" | "sales" | "all";
+export const isSaleTx = (t: Transaction) => t.category === "venda" || t.category === "servico" || t.scope === "sales";
+export const filterScope = (txs: Transaction[], scope: Scope): Transaction[] =>
+  scope === "all" ? txs : txs.filter((t) => (scope === "sales" ? isSaleTx(t) : !isSaleTx(t)));

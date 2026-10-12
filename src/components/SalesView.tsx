@@ -24,6 +24,7 @@ interface Props {
   inventory: InventoryItem[];
   transactions: Transaction[];
   invoices: Invoice[];
+  company?: Partial<import("../lib/types").Config>;
   houseName: string;
   now: number;
   onAddItem: (i: Omit<SaleItem, "id">) => void;
@@ -62,7 +63,7 @@ const suggestions: { n: string; k: SaleKind }[] = [
 const methods = ["Dinheiro", "Multicaixa", "Transferência"];
 
 export default function SalesView({
-  catalog, inventory, transactions, invoices, houseName, now, onAddItem, onRemoveItem, onUpdatePrice, onCheckout, onClose,
+  catalog, inventory, transactions, invoices, houseName, company, now, onAddItem, onRemoveItem, onUpdatePrice, onCheckout, onClose,
   canManage = true, canRemove = true, onlyActorId = null,
 }: Props) {
   const [tab, setTab] = useState<"vender" | "hoje" | "faturas">("vender");
@@ -308,7 +309,7 @@ export default function SalesView({
             </div>
           </>
         )}
-      {tab === "faturas" && <InvoiceHistory invoices={invoices ?? []} onlyActorId={onlyActorId} houseName={houseName} />}
+      {tab === "faturas" && <InvoiceHistory invoices={invoices ?? []} onlyActorId={onlyActorId} houseName={houseName} company={company} />}
       </div>
 
       {cart.length > 0 && (

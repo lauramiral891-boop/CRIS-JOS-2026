@@ -1,3 +1,5 @@
+import type { Config } from "./types";
+import { createProformaA4 } from "./invoiceA4";
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
 
@@ -18,6 +20,7 @@ export interface InvoicePdfData {
   lines: InvoicePdfLine[];
   total: number;
   houseName?: string;
+  company?: Partial<Config>;
 }
 
 const money = (n: number) =>
@@ -31,6 +34,7 @@ export async function createInvoicePdf(
   invoice: InvoicePdfData,
   format: "a4" | "thermal" = "a4"
 ): Promise<Blob> {
+  if (format === "a4") return createProformaA4(invoice);
   const thermal = format === "thermal";
   const width = thermal ? 80 : 210;
   const margin = thermal ? 5 : 15;

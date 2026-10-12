@@ -39,7 +39,7 @@ import { hashPass, normCode } from "./lib/auth";
 import { inviteTaken, type Account, type Session as LoginSession } from "./lib/accounts";
 import { clockHM, formatAOA, formatAOAshort, formatClock, pad, playerMatches, timeAgo } from "./lib/format";
 import { addDays, bookingTs, sod, startOfWeek, ymd } from "./lib/dates";
-import { buildReport, checkClosedPeriods, totals, type Report } from "./lib/reports";
+import { buildReport, checkClosedPeriods, totals, filterScope, type Report } from "./lib/reports";
 import { fmtTime, fullDate } from "./lib/pdf";
 import type { AiContext } from "./lib/assistant";
 import { startAlarm, stopAlarm, unlockAudio } from "./utils/alarm";
@@ -184,10 +184,10 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     void systemNotify(title, text || undefined, "adm");
   };
 
-  const addTx = (type: "in" | "out", value: number, label: string, detail = "", category: TxCategory = "manual", plan?: string) =>
+  const addTx = (type: "in" | "out", value: number, label: string, detail = "", category: TxCategory = "manual", plan?: string, scope?: "house" | "sales") =>
     setData((d) => ({
       ...d,
-      transactions: [{ id: uid(), type, value, label, detail, ts: Date.now(), category, plan, actorId: actorRef.current.id, actorName: actorRef.current.name }, ...d.transactions],
+      transactions: [{ id: uid(), type, value, label, detail, ts: Date.now(), category, plan, scope, actorId: actorRef.current.id, actorName: actorRef.current.name }, ...d.transactions],
     }));
 
   const stationName = (id: number) => stations.find((s) => s.id === id)?.name ?? `Máquina ${id}`;
@@ -687,7 +687,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     const label = { inicial: "Stock inicial", compra: "Entrada (compra)", venda: "Saída por venda", consumo: "Saída: alimentação", despesa: "Saída: despesa da casa", perda: "Saída: perda", ajuste: "Ajuste" }[reason];
     logAct("stock", `${label}: ${it.name}`, `${kind === "in" ? "+" : "−"}${qty} ${unit}`);
     if (kind === "in" && reason === "compra" && o.asExpense && cost > 0) {
-      addTx("out", Math.round(qty * cost), `Compra de stock: ${it.name}`, `${qty} × ${formatAOAshort(cost)}`, "manual");
+      addTx("out", Math.round(qty * cost), `Compra de stock: ${it.name}`, `${qty} × ${formatAOAshort(cost)}`, "manual", undefined, "sales");
     }
     if (!o.quiet) toast(kind === "in" ? "Entrada registada" : "Saída registada", `${it.name} • ${kind === "in" ? "+" : "−"}${qty} ${unit}`, kind === "in" ? "green" : "amber");
     const left = Math.max(0, kind === "in" ? it.stock + qty : it.stock - qty);
@@ -770,7 +770,8 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     const w0 = startOfWeek(t);
     const m0 = new Date(t.getFullYear(), t.getMonth(), 1);
     const m1 = new Date(t.getFullYear(), t.getMonth() + 1, 1);
-    const today = totals(d.transactions, d0, d1);
+    const houseTx = filterScope(d.transactions, "house");
+    const today = totals(houseTx, d0, d1);
     const salesToday = d.transactions
       .filter((x) => (x.category === "venda" || x.category === "servico") && x.type === "in" && x.ts >= d0.getTime() && x.ts < d1.getTime())
       .reduce((a, x) => a + x.value, 0);
@@ -792,10 +793,10 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
       occupied: d.stations.filter((s) => busy.has(s.id)).length,
       revenueToday: today.income,
       expenseToday: today.expense,
-      revenueWeek: totals(d.transactions, w0, addDays(w0, 7)).income,
-      revenueMonth: totals(d.transactions, m0, m1).income,
+      revenueWeek: totals(houseTx, w0, addDays(w0, 7)).income,
+      revenueMonth: totals(houseTx, m0, m1).income,
       salesToday,
-      balance: d.config.openingBalance + d.transactions.reduce((a, x) => a + (x.type === "in" ? x.value : -x.value), 0),
+      balance: d.config.openingBalance + houseTx.reduce((a, x) => a + (x.type === "in" ? x.value : -x.value), 0),
       goal: d.config.dailyGoal,
       players: d.players.length,
       openTime: d.config.openTime,
@@ -1074,7 +1075,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                 )}
                 {tab === "players" && (
                   <SalesView
-                    catalog={catalog} inventory={inventory} transactions={transactions} invoices={data.invoices ?? []} houseName={config.houseName} now={now}
+                    catalog={catalog} inventory={inventory} transactions={transactions} invoices={data.invoices ?? []} houseName={config.houseName} company={config} now={now}
                     onAddItem={g("catalog", addCatalogItem)}
                     onRemoveItem={g("owner", ask(() => "Apagar este item do catálogo?", removeCatalogItem))}
                     onUpdatePrice={g("catalog", updateCatalogPrice)}
@@ -1085,7 +1086,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                 {tab === "finances" && (
                   <FinanceScreen
                     transactions={transactions} balance={balance} now={now}
-                    onAdd={g("finance", (type: "in" | "out", value: number, label: string) => { addTx(type, value, (type === "in" ? "Receita: " : "Despesa: ") + label); notify(type === "in" ? "Entrada registada" : "Despesa registada", `${type === "in" ? "+" : "-"} ${formatAOAshort(value)} • ${label}`, type === "in" ? "green" : "red"); })}
+                    onAdd={g("finance", (type: "in" | "out", value: number, label: string, sc?: "house" | "sales") => { addTx(type, value, (type === "in" ? "Receita: " : "Despesa: ") + label, "", "manual", undefined, sc); notify(type === "in" ? "Entrada registada" : "Despesa registada", `${type === "in" ? "+" : "-"} ${formatAOAshort(value)} • ${label}`, type === "in" ? "green" : "red"); })}
                     onOpenReports={g("reports", (t: ReportTab) => setReports({ open: true, kind: t }))}
                     onOpenSales={g("sales", () => setShowSales(true))}
                   />
@@ -1220,7 +1221,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
               {showSales && (
                 <SalesView
-                  catalog={catalog} inventory={inventory} transactions={transactions} invoices={data.invoices ?? []} houseName={config.houseName} now={now}
+                  catalog={catalog} inventory={inventory} transactions={transactions} invoices={data.invoices ?? []} houseName={config.houseName} company={config} now={now}
                   onAddItem={g("catalog", addCatalogItem)}
                   onRemoveItem={g("owner", ask(() => "Apagar este item do catálogo?", removeCatalogItem))}
                   onUpdatePrice={g("catalog", updateCatalogPrice)}

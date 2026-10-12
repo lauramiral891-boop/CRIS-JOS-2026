@@ -11,9 +11,10 @@ interface Props {
   invoices: Invoice[];
   onlyActorId: string | null;
   houseName: string;
+  company?: Partial<import("../lib/types").Config>;
 }
 
-export default function InvoiceHistory({ invoices, onlyActorId, houseName }: Props) {
+export default function InvoiceHistory({ invoices, onlyActorId, houseName, company }: Props) {
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -40,6 +41,7 @@ export default function InvoiceHistory({ invoices, onlyActorId, houseName }: Pro
         lines: invoice.lines,
         total: invoice.total,
         houseName: houseName || "CJ Gerenciamento",
+          company,
       }, format);
 
       const filename = invoice.number + (format === "a4" ? "-A4.pdf" : "-termica.pdf");
@@ -85,6 +87,7 @@ export default function InvoiceHistory({ invoices, onlyActorId, houseName }: Pro
           lines: invoice.lines,
           total: invoice.total,
           houseName: houseName || "CJ Gerenciamento",
+          company,
         }, format);
       }
     } catch (e) {

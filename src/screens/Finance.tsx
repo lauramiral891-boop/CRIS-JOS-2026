@@ -5,7 +5,7 @@ import Sheet from "../components/Sheet";
 import { ErrorBox, Field, fieldCls } from "../components/ui";
 import type { ReportTab } from "../components/ReportsView";
 import type { Transaction } from "../lib/types";
-import { totals } from "../lib/reports";
+import { totals, filterScope } from "../lib/reports";
 import { WEEKDAYS_SHORT, addDays, dm, sod, startOfWeek } from "../lib/dates";
 import { clockHM, compactAOA, formatAOA, formatAOAshort } from "../lib/format";
 import { cn } from "../utils/cn";
@@ -16,7 +16,7 @@ export default function FinanceScreen({
   transactions: Transaction[];
   balance: number;
   now: number;
-  onAdd: (type: "in" | "out", value: number, label: string) => void;
+  onAdd: (type: "in" | "out", value: number, label: string, scope?: "house" | "sales") => void;
   onOpenReports: (tab: ReportTab) => void;
   onOpenSales: () => void;
 }) {
@@ -25,13 +25,14 @@ export default function FinanceScreen({
   const [value, setValue] = useState("");
   const [label, setLabel] = useState("");
   const [err, setErr] = useState("");
-  const [scope, setScope] = useState<"all" | "games" | "sales">("all");
-  const GAMES = ["sessao", "extensao", "recarga"];
-  const SALES = ["venda", "servico"];
+  const [scope, setScope] = useState<"all" | "games" | "sales">("games");
   const transactions =
-    scope === "games" ? allTransactions.filter((t) => GAMES.includes(t.category))
-    : scope === "sales" ? allTransactions.filter((t) => SALES.includes(t.category))
+    scope === "games" ? filterScope(allTransactions, "house")
+    : scope === "sales" ? filterScope(allTransactions, "sales")
     : allTransactions;
+  const salesNet = filterScope(allTransactions, "sales").reduce((s, t) => s + (t.type === "in" ? t.value : -t.value), 0);
+  const shownBalance = scope === "sales" ? salesNet : scope === "games" ? balance - salesNet : balance;
+  const [txScope, setTxScope] = useState<"house" | "sales">("house");
 
   const nowD = new Date(now);
   const today = sod(nowD);
@@ -59,7 +60,7 @@ export default function FinanceScreen({
     const v = parseFloat(value.replace(",", "."));
     if (!v || v <= 0) return setErr("Indique um valor válido em AOA.");
     if (!label.trim()) return setErr("Indique uma descrição.");
-    onAdd(kind, v, label.trim());
+    onAdd(kind, v, label.trim(), txScope);
     setShowNew(false); setValue(""); setLabel(""); setErr("");
   };
 
@@ -74,14 +75,14 @@ export default function FinanceScreen({
     <div className="space-y-4 px-4 pb-6">
       <h1 className="rise pt-1 text-center font-display text-[26px] font-extrabold uppercase tracking-wide">Visão Financeira</h1>
       <div className="flex justify-center gap-1.5">
-        {([["all", "Tudo"], ["games", "Jogos"], ["sales", "Vendas"]] as const).map(([id, label]) => (
+        {([["all", "Tudo"], ["games", "Game House"], ["sales", "Outras vendas"]] as const).map(([id, label]) => (
           <button key={id} onClick={() => setScope(id)} className={cn("rounded-full border px-3 py-1 text-[11px] font-bold transition active:scale-95", scope === id ? "border-[#00FF88] bg-[#00FF88]/15 text-[#00FF88]" : "border-white/10 bg-[#1e1e1e] text-neutral-400")}>{label}</button>
         ))}
       </div>
 
       <div className="rise rise-1 neon-border-cyan rounded-2xl bg-[#141414] p-5 text-center">
         <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-neutral-400">Saldo Atual</p>
-        <p className="neon-text-cyan mt-1 font-display text-[34px] font-extrabold leading-none text-white">{formatAOA(balance)}</p>
+        <p className="neon-text-cyan mt-1 font-display text-[34px] font-extrabold leading-none text-white">{formatAOA(shownBalance)}</p>
         <p className="mt-1.5 text-[13px] text-neutral-400">Total de Fundos Disponíveis</p>
         <div className="mx-auto mt-3 flex max-w-[300px] items-center justify-between gap-2 rounded-xl bg-white/[0.04] px-3 py-2 text-[11px] font-bold">
           <span className="flex items-center gap-1 text-[#00FF88]"><ArrowDownLeft size={12} /> Hoje {formatAOAshort(todayTotals.income)}</span>
@@ -198,7 +199,8 @@ export default function FinanceScreen({
             <Field label="Descrição">
               <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={kind === "in" ? "Ex: Venda de bebidas" : "Ex: Conta de luz"} className={fieldCls} />
             </Field>
-            <ErrorBox msg={err} />
+            <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-[#1e1e1e] p-1.5">{(["house", "sales"] as const).map((s) => (<button key={s} onClick={() => setTxScope(s)} className={cn("rounded-xl py-2 text-[11px] font-extrabold uppercase", txScope === s ? "bg-[#00E5FF] text-black" : "text-neutral-500")}>{s === "house" ? "Game House" : "Outras vendas"}</button>))}</div>
+        <ErrorBox msg={err} />
             <button onClick={submit} className="w-full rounded-xl bg-[#00E5FF] py-3 text-[13px] font-extrabold uppercase tracking-widest text-black transition active:scale-[0.98]">
               Guardar Transação
             </button>
