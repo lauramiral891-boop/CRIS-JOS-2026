@@ -25,11 +25,11 @@ const TAB_INTROS: Record<MainTab, { title: string; text: string; tip: string }> 
 
 interface Props {
   userKey: string;
+  manualOpen: number;
   tab: MainTab;
   onNavigate: (tab: MainTab) => void;
   isOwner: boolean;
   room: Room | null;
-  openTrigger: number;
 }
 interface Progress { welcomeSeen: boolean; tourComplete: boolean; completed: string[]; seenRooms: string[] }
 const blank: Progress = { welcomeSeen: false, tourComplete: false, completed: [], seenRooms: [] };
@@ -39,13 +39,12 @@ function loadProgress(key: string): Progress {
   catch { return { ...blank }; }
 }
 
-export default function OnboardingGuide({ userKey, tab, onNavigate, isOwner, room, openTrigger }: Props) {
+export default function OnboardingGuide({ userKey, manualOpen, tab, onNavigate, isOwner, room }: Props) {
   const [progress, setProgress] = useState<Progress>(() => loadProgress(userKey));
   const [mode, setMode] = useState<"welcome" | "tour" | "tab" | "room" | null>(null);
   const [index, setIndex] = useState(0);
   const [pendingRoom, setPendingRoom] = useState<Room | null>(null);
   const [pendingTab, setPendingTab] = useState<MainTab | null>(null);
-  const prevTrigger = useRef(openTrigger);
   const steps = useMemo(() => isOwner ? STEPS : STEPS.filter((step) => step.target !== "staff"), [isOwner]);
   const current = steps[Math.min(index, steps.length - 1)];
   const tabIntro = pendingTab ? TAB_INTROS[pendingTab] : null;
@@ -60,29 +59,32 @@ export default function OnboardingGuide({ userKey, tab, onNavigate, isOwner, roo
     setPendingRoom(null);
   }, [userKey]);
 
+  const previousManualOpen = useRef(manualOpen);
+  useEffect(() => {
+    if (manualOpen > previousManualOpen.current) {
+      previousManualOpen.current = manualOpen;
+      setIndex(0);
+      setPendingRoom(null);
+      setPendingTab(null);
+      setMode("welcome");
+    }
+  }, [manualOpen]);
   useEffect(() => {
     try { localStorage.setItem(storageKey(userKey), JSON.stringify(progress)); } catch { /* o guia continua disponível nesta sessão */ }
   }, [progress, userKey]);
 
-  useEffect(() => {
-    if (openTrigger !== prevTrigger.current) {
-      prevTrigger.current = openTrigger;
-      setPendingRoom(null);
-      setIndex(0);
-      setMode("welcome");
-    }
-  }, [openTrigger]);
+
 
   useEffect(() => {
     if (!room) return;
     const roomKey = String(room.id);
     if (progress.seenRooms.includes(roomKey)) return;
     setPendingRoom(room);
-    if (mode === null) setMode("room");
+    if (mode === null && !progress.welcomeSeen) setMode("room");
   }, [room?.id, progress.seenRooms, mode]);
 
   useEffect(() => {
-    if (!progress.welcomeSeen || mode !== null || room) return;
+    if (!progress.welcomeSeen || mode !== null || room || progress.tourComplete || progress.welcomeSeen) return;
     const key = `tab:${tab}`;
     if (progress.completed.includes(key)) return;
     setPendingTab(tab);

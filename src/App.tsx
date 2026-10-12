@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Home, CalendarDays, Users, Wallet, Settings as SettingsIcon, X, CheckCircle2,
-  Sparkles, Zap, Bell, Trash2, Bot,
+  Home, CalendarDays, Users, Wallet, Settings as SettingsIcon, X, CheckCircle2, Sparkles,
+  Sparkles, Zap, Bell, Trash2, Bot, CircleHelp,
 } from "lucide-react";
 import { TopHeader } from "./components/shared";
 import StartSessionModal from "./components/StartSessionModal";
@@ -14,7 +14,6 @@ import GamesRoom from "./components/GamesRoom";
 import SalesView, { type CartLine } from "./components/SalesView";
 import AssistantView from "./components/AssistantView";
 import OnboardingGuide from "./components/OnboardingGuide";
-import FloatingGuideBot from "./components/FloatingGuideBot";
 import PdfShareSheet from "./components/PdfShareSheet";
 import MyCashCard, { todaysOf } from "./components/MyCashCard";
 import StaffManager, { type NewStaff } from "./components/StaffManager";
@@ -102,6 +101,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
   const [now, setNow] = useState(() => Date.now());
   const [tab, setTab] = useState<Tab>("home");
+  const [guideManualOpen, setGuideManualOpen] = useState(0);
   const auth: Auth = session.role === "owner" ? { role: "owner" } : { role: "staff", staffId: session.staffId };
   const [confirm, setConfirm] = useState<{ msg: string; label?: string; run: () => void } | null>(null);
   const [showStaff, setShowStaff] = useState(false);
@@ -114,7 +114,6 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   const [showGoal, setShowGoal] = useState(false);
   const [showSales, setShowSales] = useState(false);
   const [showAI, setShowAI] = useState(false);
-  const [guideTrigger, setGuideTrigger] = useState(0);
   const [pdfSheet, setPdfSheet] = useState<{ open: boolean; report: Report | null; own?: boolean }>({ open: false, report: null });
   const [reports, setReports] = useState<{ open: boolean; kind: ReportTab }>({ open: false, kind: "day" });
   const [startModal, setStartModal] = useState<{ open: boolean; stationId: number | null }>({ open: false, stationId: null });
@@ -1095,14 +1094,14 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                 className="absolute bottom-[108px] right-3 z-30 grid h-12 w-12 place-items-center rounded-full bg-gradient-to-br from-[#00E5FF] to-[#00FF88] text-black shadow-[0_0_22px_rgba(0,229,255,0.55)] transition active:scale-90"
               >
                 <span className="absolute inset-0 animate-ping rounded-full bg-[#00E5FF]/30" />
-                <Bot size={23} className="relative" />
+                <Sparkles size={23} className="relative" />
               </button>}
 
               {activeAds.length > 0 && <div className="relative pt-2"><AdBanner ads={activeAds} slideSec={gadm.slideSec} onView={adView} onClick={adClick} /></div>}
 
               <nav className="relative border-t border-white/[0.08] bg-[#0e0e0e]/95 px-2 pt-2 backdrop-blur" style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom, 0px))" }}>
                 <div className="absolute -top-[1.5px] left-0 h-[2px] w-full bg-gradient-to-r from-transparent via-[#00E5FF]/60 to-transparent" />
-                <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleTabs.length}, minmax(0, 1fr))` }}>
+                <div className="grid" style={{ gridTemplateColumns: `repeat(${visibleTabs.length + 1}, minmax(0, 1fr))` }}>
                   {visibleTabs.map((t) => {
                     const active = tab === t.id;
                     return (
@@ -1119,6 +1118,10 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                       </button>
                     );
                   })}
+                  <button onClick={() => setGuideManualOpen((n) => n + 1)} aria-label="Tutorial" className="group flex flex-col items-center gap-1 py-1.5 transition active:scale-95">
+                    <span className="grid h-7 w-12 place-items-center rounded-full text-[#00E5FF]"><CircleHelp size={20} /></span>
+                    <span className="text-[10.5px] font-semibold text-neutral-500">Tutorial</span>
+                  </button>
                 </div>
               </nav>
 
@@ -1249,8 +1252,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
           {room && <RoomView room={room} onClose={() => setRoom(null)} />}
           {showGames && <GamesRoom games={gadm.games.filter((x) => x.active)} onClose={() => setShowGames(false)} />}
-      <OnboardingGuide userKey={String(account.id)} tab={tab} onNavigate={setTab} isOwner={isOwner} room={room} openTrigger={guideTrigger} />
-      <FloatingGuideBot onStartGuide={() => setGuideTrigger((v) => v + 1)} onOpenAI={() => setShowAI(true)} isOwner={isOwner} />
+      <OnboardingGuide userKey={String(account.id)} manualOpen={guideManualOpen} tab={tab} onNavigate={setTab} isOwner={isOwner} room={room} />
 
           <div className="pointer-events-none absolute inset-x-4 bottom-28 z-[80] flex flex-col gap-2">
             {toasts.map((t) => (
