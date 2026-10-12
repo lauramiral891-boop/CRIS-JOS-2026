@@ -1,0 +1,44 @@
+name: Gerar APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [apk]
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar o site
+        run: npm run build
+
+      - name: Sincronizar o Android
+        run: |
+          rm -f android/local.properties
+          npx cap sync android
+
+      - name: Compilar o APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cj-gerenciamento-apk
+          path: android/app/build/outputs/apk/debug/*.apk
