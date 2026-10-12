@@ -430,10 +430,12 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [tab]);
   useEffect(() => { if (!visibleTabs.some((t) => t.id === tab)) setTab("home"); });
   const mainApplied = useRef(false);
+  const [askMain, setAskMain] = useState(false);
   useEffect(() => {
     if (mainApplied.current || !loggedIn) return;
     mainApplied.current = true;
     if (config.mainScreen === "sales" && visibleTabs.some((t) => t.id === "players")) setTab("players");
+    setAskMain(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loggedIn]);
 
@@ -1233,6 +1235,31 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                 />
               )}
 
+              {askMain && loggedIn && (
+                <div className="fixed inset-0 z-[80] grid place-items-center bg-black/80 px-5">
+                  <div className="w-full max-w-sm rounded-3xl border border-[#00FF88]/40 bg-[#141414] p-5 text-center">
+                    <p className="font-display text-[20px] font-extrabold uppercase tracking-wide">Onde quer começar?</p>
+                    <p className="mt-1 text-[12px] text-neutral-400">Escolha o ecrã principal desta sessão.</p>
+                    <div className="mt-4 space-y-2.5">
+                      {([["home", "Gestão das máquinas"], ["sales", "Outras vendas"]] as const)
+                        .filter(([k]) => k === "home" || visibleTabs.some((t) => t.id === "players"))
+                        .map(([k, label]) => (
+                          <button
+                            key={k}
+                            onClick={() => {
+                              setTab(k === "sales" ? "players" : "home");
+                              if (isOwner && (config.mainScreen ?? "home") !== k) patchConfig({ mainScreen: k });
+                              setAskMain(false);
+                            }}
+                            className={"w-full rounded-2xl border py-4 text-[14px] font-extrabold uppercase tracking-wider active:scale-95 " + ((config.mainScreen ?? "home") === k ? "border-[#00FF88] bg-[#00FF88] text-black" : "border-white/15 text-neutral-200")}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              )}
               {showAI && isOwner && (
                 <AssistantView config={config} ownerName={config.ownerName} getCtx={getAiCtx} onPatch={patchConfig} onClose={() => setShowAI(false)} />
               )}
