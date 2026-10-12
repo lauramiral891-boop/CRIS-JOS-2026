@@ -64,7 +64,7 @@ function Variation({ cur, prev }: { cur: number; prev: number }) {
 }
 
 export default function ReportsView({
-  transactions, now, lang, initial, onClose, onSendPdf,
+  transactions: allTransactions, now, lang, initial, onClose, onSendPdf: sendPdfRaw,
 }: {
   onSendPdf: (r: Report) => void;
   transactions: Transaction[];
@@ -75,6 +75,13 @@ export default function ReportsView({
 }) {
   const nowDate = new Date(now);
   const [tab, setTab] = useState<ReportTab>(initial);
+  const [scope, setScope] = useState<"all" | "games" | "sales">("all");
+  const transactions = useMemo(() => {
+    if (scope === "games") return allTransactions.filter((t) => ["sessao", "extensao", "recarga"].includes(t.category));
+    if (scope === "sales") return allTransactions.filter((t) => ["venda", "servico"].includes(t.category));
+    return allTransactions;
+  }, [allTransactions, scope]);
+  const onSendPdf = (r: Parameters<typeof sendPdfRaw>[0]) => sendPdfRaw({ ...r, scope } as typeof r);
   const [anchor, setAnchor] = useState<Date>(() => sod(new Date()));
   const [calMonth, setCalMonth] = useState<Date>(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selDay, setSelDay] = useState<string>(() => ymd(new Date()));
@@ -156,6 +163,11 @@ export default function ReportsView({
         ))}
       </div>
 
+      <div className="flex gap-1.5 px-4 pb-2">
+        {([["all", "Tudo"], ["games", "Jogos"], ["sales", "Vendas"]] as const).map(([id, label]) => (
+          <button key={id} onClick={() => setScope(id)} className={cn("rounded-full border px-3 py-1 text-[11px] font-bold transition active:scale-95", scope === id ? "border-[#00FF88] bg-[#00FF88]/15 text-[#00FF88]" : "border-white/10 bg-[#1e1e1e] text-neutral-400")}>{label}</button>
+        ))}
+      </div>
       <div className="thin-scroll flex-1 space-y-3.5 overflow-y-auto px-4 pb-8">
         {report && (
           <>

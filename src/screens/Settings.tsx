@@ -3,6 +3,7 @@ import {
   User, Lock, Star, Monitor, DollarSign, Clock3, BellRing, Globe, CloudUpload, ShoppingCart, FileText, Bot,
   Info, LogOut, ChevronRight, LifeBuoy, Cloud, Volume2, Vibrate, AlarmClock, Target, Sun, Moon, UserPlus, History,
 } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 import { checkPass, hashPass } from "../lib/auth";
 import {
   AboutSheet, BackupSheet, GoalSheet, HoursSheet, LanguageSheet, LogoutConfirm,
@@ -91,6 +92,10 @@ export default function SettingsScreen(p: Props) {
       {
         icon: Vibrate, label: "Vibração do Telemóvel", value: config.vibrateOn ? "Ativada" : "Desativada", color: "text-[#FF4D6D]", toggleOn: config.vibrateOn,
         action: () => { p.onPatch({ vibrateOn: !config.vibrateOn }); toast(config.vibrateOn ? "Vibração desativada" : "Vibração ativada", undefined, "cyan"); },
+      },
+      {
+        icon: LayoutDashboard, label: "Ecrã principal", value: config.mainScreen === "sales" ? "Vendas" : "Máquinas", color: "text-[#00E5FF]",
+        action: () => { const next: "home" | "sales" = config.mainScreen === "sales" ? "home" : "sales"; p.onPatch({ mainScreen: next }); toast("Ecrã principal: " + (next === "sales" ? "Vendas" : "Máquinas"), "A app abre aqui ao entrar.", "cyan"); },
       },
       { icon: AlarmClock, label: "Testar Alarme", value: "Tocar", color: "text-[#FFC107]", action: p.onTestAlarm },
     ],

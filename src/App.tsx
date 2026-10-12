@@ -52,12 +52,13 @@ import { merge3, mergeData } from "./lib/merge";
 import { askNotifPermission, notifPermission, syncAlarms, systemNotify, updateMachineCountdown } from "./lib/push";
 import { cn } from "./utils/cn";
 
+import { ShoppingBag } from "lucide-react";
 type Tab = "home" | "bookings" | "players" | "finances" | "settings";
 
 const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "home", label: "Início", icon: Home },
   { id: "bookings", label: "Reservas", icon: CalendarDays },
-  { id: "players", label: "Jogadores", icon: Users },
+  { id: "players", label: "Vendas", icon: ShoppingBag },
   { id: "finances", label: "Finanças", icon: Wallet },
   { id: "settings", label: "Definições", icon: SettingsIcon },
 ];
@@ -203,7 +204,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     isOwner ||
     t.id === "home" || t.id === "settings" ||
     (t.id === "bookings" && can("bookings")) ||
-    (t.id === "players" && can("players")) ||
+    (t.id === "players" && can("sales")) ||
     (t.id === "finances" && can("finance"))
   );
   const deny = () => toast("Sem permissão", "O proprietário não lhe deu acesso a esta ação.", "red");
@@ -407,6 +408,13 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [tab]);
   useEffect(() => { if (!visibleTabs.some((t) => t.id === tab)) setTab("home"); });
+  const mainApplied = useRef(false);
+  useEffect(() => {
+    if (mainApplied.current || !loggedIn) return;
+    mainApplied.current = true;
+    if (config.mainScreen === "sales" && visibleTabs.some((t) => t.id === "players")) setTab("players");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn]);
 
   /* A cada minuto: apaga notificações com +24h, fecha períodos e avisa reservas */
   const minuteKey = Math.floor(now / 60000);
@@ -1047,7 +1055,14 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                   <BookingsScreen bookings={bookings} stations={stations} now={now} lang={config.lang} onAdd={g("bookings", addBooking)} onStatus={g("bookings", setBookingStatus)} onRemove={g("bookings", ask(() => "Apagar esta reserva? Fica registado quem a apagou.", removeBooking))} />
                 )}
                 {tab === "players" && (
-                  <PlayersScreen players={players} sessions={sessions} now={now} houseName={config.houseName} onRegister={g("players", registerPlayer)} onTopUp={g("players", topUp)} onRemove={g("players", ask((id: number) => `Apagar o jogador ${dataRef.current.players.find((x) => x.id === id)?.name ?? ""}? Fica registado quem o apagou.`, removePlayer))} onImport={g("players", importPlayers)} />
+                  <SalesView
+                    catalog={catalog} inventory={inventory} transactions={transactions} invoices={data.invoices ?? []} houseName={config.houseName} now={now}
+                    onAddItem={g("catalog", addCatalogItem)}
+                    onRemoveItem={g("owner", ask(() => "Apagar este item do catálogo?", removeCatalogItem))}
+                    onUpdatePrice={g("catalog", updateCatalogPrice)}
+                    canManage={can("catalog")} canRemove={isOwner} onlyActorId={isOwner ? null : actor.id}
+                    onCheckout={g("sales", checkoutSale)} onClose={() => setTab("home")}
+                  />
                 )}
                 {tab === "finances" && (
                   <FinanceScreen

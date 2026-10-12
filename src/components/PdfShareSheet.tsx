@@ -45,7 +45,7 @@ const ddis = [
 
 const sizes = [9, 10, 11, 12, 13, 14];
 
-export default function PdfShareSheet({ config, report, txs, onPatch: patchHouse, staffName, ownCash, notify, toast, onClose }: Props) {
+export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: patchHouse, staffName, ownCash, notify, toast, onClose }: Props) {
   const [err, setErr] = useState("");
   const [localNum, setLocalNum] = useState(config.waNumber);
   const [localDdi, setLocalDdi] = useState(config.waDdi);
@@ -61,6 +61,10 @@ export default function PdfShareSheet({ config, report, txs, onPatch: patchHouse
 
   const font = fonts.find((f) => f.id === config.pdfFont) ?? fonts[0];
   const now = new Date();
+  const sc = (report as { scope?: string } | null)?.scope;
+  const txs = sc === 'games' ? allTxs.filter((t) => ["sessao", "extensao", "recarga"].includes(t.category))
+    : sc === 'sales' ? allTxs.filter((t) => ["venda", "servico"].includes(t.category))
+    : allTxs;
 
   const waDigits = (): string => {
     const raw = waNumber.trim();

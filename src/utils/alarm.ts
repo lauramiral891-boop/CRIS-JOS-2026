@@ -1,3 +1,6 @@
+import { Capacitor } from "@capacitor/core";
+import { Haptics } from "@capacitor/haptics";
+
 let ctx: AudioContext | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 
@@ -43,8 +46,12 @@ function ring({ sound, vibrate }: AlarmOpts) {
     [0, 0.28, 0.56].forEach((t, i) => beep(i % 2 ? 880 : 1175, t, 0.2));
     beep(1175, 0.84, 0.35);
   }
-  if (vibrate && "vibrate" in navigator) {
-    navigator.vibrate([400, 150, 400, 150, 600]);
+  if (vibrate) {
+    if (Capacitor.isNativePlatform()) {
+      void Haptics.vibrate({ duration: 900 }).catch(() => {});
+    } else if ("vibrate" in navigator) {
+      navigator.vibrate([400, 150, 400, 150, 600]);
+    }
   }
 }
 
@@ -53,7 +60,7 @@ export function stopAlarm() {
     clearInterval(timer);
     timer = null;
   }
-  if ("vibrate" in navigator) navigator.vibrate(0);
+  if (!Capacitor.isNativePlatform() && "vibrate" in navigator) navigator.vibrate(0);
 }
 
 export function startAlarm(opts: AlarmOpts) {

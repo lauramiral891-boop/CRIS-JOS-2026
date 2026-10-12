@@ -155,6 +155,7 @@ export interface Config {
   lang: "pt-AO" | "pt-PT" | "pt-BR";
   soundOn: boolean;
   vibrateOn: boolean;
+  mainScreen?: "home" | "sales";
   defaultPlans: Plan[];
   lastBackup: number | null;
   // Relatório em PDF / WhatsApp

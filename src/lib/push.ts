@@ -14,6 +14,7 @@ const mapPerm = (d: string): NotificationPermission => (d === "granted" ? "grant
 
 export const CH_ALERT = "cj-alertas";
 export const CH_GENERAL = "cj-geral";
+export const CH_TIMER = "cj-contagem";
 
 /** Chamar uma vez ao abrir a app: lê a permissão e cria os canais do Android. */
 export async function initNotifications() {
@@ -23,6 +24,7 @@ export async function initNotifications() {
     nativePerm = mapPerm((await L.checkPermissions()).display);
     if (cap()?.getPlatform?.() === "android") {
       await L.createChannel({ id: CH_ALERT, name: "Alertas (tempo esgotado)", description: "Fim de sessões e avisos urgentes", importance: 5, visibility: 1, vibration: true, lights: true });
+      await L.createChannel({ id: CH_TIMER, name: "Contagem das máquinas", description: "Tempo restante, sem som", importance: 2, visibility: 1, vibration: false });
       await L.createChannel({ id: CH_GENERAL, name: "Avisos da Game House", description: "Vendas, reservas, relatórios e avisos da CJ", importance: 4, visibility: 1, vibration: true });
     }
   } catch {
@@ -63,7 +65,7 @@ export async function systemNotify(title: string, body?: string, tag?: string, u
     if (nativePerm !== "granted") return false;
     try {
       const L = await ln();
-      await L.schedule({ notifications: [{ id: tag ? nid(tag.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) : nid(Date.now() + counter++), title, body: body ?? "", channelId: urgent ? CH_ALERT : CH_GENERAL }] });
+      await L.schedule({ notifications: [{ id: tag ? nid(tag.split("").reduce((a, c) => a * 31 + c.charCodeAt(0), 7)) : nid(Date.now() + counter++), title, body: body ?? "", smallIcon: "ic_stat_cj", largeIcon: "ic_large_cj", channelId: urgent ? CH_ALERT : CH_GENERAL }] });
       return true;
     } catch { return false; }
   }
@@ -98,7 +100,7 @@ export async function syncAlarms(list: DueAlarm[]) {
     if (future.length) {
       await L.schedule({
         notifications: future.map((a) => ({
-          id: nid(a.id), title: a.title, body: a.body, channelId: CH_ALERT,
+          id: nid(a.id), title: a.title, body: a.body, smallIcon: "ic_stat_cj", largeIcon: "ic_large_cj", channelId: CH_ALERT,
           schedule: { at: new Date(a.at), allowWhileIdle: true },
         })),
       });
@@ -127,9 +129,7 @@ export async function updateMachineCountdown(list: MachineCountdown[]) {
       const sec = remaining % 60;
       const clock = `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 
-      await L.cancel({
-        notifications: [{ id: nid(900000 + machine.id) }],
-      });
+      if (remaining <= 0) await L.cancel({ notifications: [{ id: nid(900000 + machine.id) }] });
 
       if (remaining > 0) {
         await L.schedule({
@@ -137,7 +137,7 @@ export async function updateMachineCountdown(list: MachineCountdown[]) {
             id: nid(900000 + machine.id),
             title: `🎮 ${machine.station}`,
             body: `${clock} restantes • ${machine.player}`,
-            channelId: CH_ALERT,
+            smallIcon: "ic_stat_cj", largeIcon: "ic_large_cj", channelId: CH_TIMER,
             ongoing: true,
             autoCancel: false,
           }],
