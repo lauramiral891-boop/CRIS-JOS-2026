@@ -241,7 +241,7 @@ export function RoomView({ room, onClose }: { room: Room; onClose: () => void })
     <div className="fade absolute inset-0 z-40 flex flex-col bg-[#121212]">
       <div className="relative shrink-0">
         {room.cover ? (
-          <div className="relative h-36">
+          <div className="relative aspect-[5/2] w-full">
             <img src={room.cover} alt="" className="h-full w-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/30 to-black/40" />
           </div>

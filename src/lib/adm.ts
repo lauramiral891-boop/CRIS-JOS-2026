@@ -99,3 +99,15 @@ export function logUnknown(q: string) {
   if (i >= 0) l[i] = { ...l[i], n: l[i].n + 1, ts: Date.now() }; else l.unshift({ q: t, n: 1, ts: Date.now() });
   saveUnknown(l.sort((a, b) => b.n - a.n || b.ts - a.ts));
 }
+
+/** Jogos e anúncios do ADM já notificados por cada casa. null = primeira vez (só regista, não avisa). */
+const seenItemsKey = (accountId: string) => `cjg-adm-seen-items:${accountId}`;
+export const loadSeenItems = (accountId: string): string[] | null => {
+  try {
+    const raw = localStorage.getItem(seenItemsKey(accountId));
+    return raw === null ? null : (JSON.parse(raw) as string[]);
+  } catch { return null; }
+};
+export const saveSeenItems = (accountId: string, ids: string[]) => {
+  try { localStorage.setItem(seenItemsKey(accountId), JSON.stringify(ids.slice(-300))); } catch { /* ignora */ }
+};

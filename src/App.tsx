@@ -43,7 +43,7 @@ import { buildReport, checkClosedPeriods, totals, type Report } from "./lib/repo
 import { fmtTime, fullDate } from "./lib/pdf";
 import type { AiContext } from "./lib/assistant";
 import { startAlarm, stopAlarm, unlockAudio } from "./utils/alarm";
-import { ADM_EVENT, loadGlobalAdm, loadSeenNotices, saveGlobalAdm, saveSeenNotices } from "./lib/adm";
+import { ADM_EVENT, loadGlobalAdm, loadSeenItems, loadSeenNotices, saveGlobalAdm, saveSeenItems, saveSeenNotices } from "./lib/adm";
 import { billInfo, newPayment } from "./lib/billing";
 import { inviteFree, licenseRequest } from "./lib/cloud";
 import { channelFor, wipeShadow, type Snap } from "./lib/sync";
@@ -243,6 +243,24 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
     unseen.filter((n) => n.ts >= account.createdAt).reverse().forEach((n) => broadcast(n.title, n.text));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gadm.notices]);
+
+  /* Jogos e anúncios novos do ADM: notificação uma só vez (na primeira abertura só regista o que já existe) */
+  useEffect(() => {
+    const seen = loadSeenItems(account.id);
+    const items = [
+      ...(gadm.games ?? []).filter((g) => g.active).map((g) => ({ key: "g:" + g.id, title: "🎮 Novo jogo: " + g.name, text: g.description, ok: g.createdAt >= account.createdAt })),
+      ...(gadm.ads ?? []).filter((x) => x.active).map((x) => ({ key: "a:" + x.id, title: x.title || "Novo anúncio", text: x.text, ok: !!gadm.adsOn })),
+    ];
+    const keys = items.map((i) => i.key);
+    if (seen === null) { saveSeenItems(account.id, keys); return; }
+    const fresh = items.filter((i) => !seen.includes(i.key));
+    if (!fresh.length) return;
+    saveSeenItems(account.id, [...seen, ...keys.filter((k) => !seen.includes(k))]);
+    const toNotify = fresh.filter((i) => i.ok);
+    if (toNotify.length > 3) broadcast("Novidades da CJ", toNotify.length + " novos jogos e anúncios.");
+    else toNotify.forEach((i) => broadcast(i.title, (i.text || "").slice(0, 120)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gadm.games, gadm.ads, gadm.adsOn]);
 
   /* Funcionário removido ou bloqueado enquanto usa a app → sai */
   useEffect(() => {

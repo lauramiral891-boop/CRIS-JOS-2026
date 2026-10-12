@@ -498,9 +498,9 @@ function RoomEditor({ room, onChange, onDone, onWarn }: { room: Room; onChange: 
           {COLORS.map((c) => <button key={c} onClick={() => onChange({ ...room, color: c })} style={{ background: c }} className={cn("h-8 w-8 rounded-full", (room.color || "#00E5FF") === c && "ring-2 ring-white ring-offset-2 ring-offset-[#1b1b1b]")} aria-label={`Cor ${c}`} />)}
         </div>
         <p className={cn(lbl, "mb-1.5 mt-3")}>Foto de capa</p>
-        {room.cover && <img src={room.cover} alt="" className="mb-2 h-24 w-full rounded-xl object-cover" />}
+        {room.cover && <img src={room.cover} alt="" className="mb-2 aspect-[5/2] w-full rounded-xl object-cover" />}
         <div className="flex gap-2">
-          <div className="flex-1"><PhotoPicker label={room.cover ? "Trocar capa" : "Escolher capa"} maxSide={900} quality={0.74} onError={onWarn} onPick={(im) => onChange({ ...room, cover: im[0] })} /></div>
+          <div className="flex-1"><PhotoPicker label={room.cover ? "Trocar capa" : "Escolher capa"} aspect={5 / 2} maxSide={900} quality={0.74} onError={onWarn} onPick={(im) => onChange({ ...room, cover: im[0] })} /></div>
           {room.cover && <button onClick={() => onChange({ ...room, cover: undefined })} className={cn(btn, "bg-white/10")}>Tirar</button>}
         </div>
       </div>
