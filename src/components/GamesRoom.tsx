@@ -59,7 +59,7 @@ export default function GamesRoom({ games, onClose }: { games: Game[]; onClose: 
             <article key={g.id} className="rounded-2xl border border-white/[0.08] bg-[#1b1b1b]">
               <div className="relative">
                 {g.cover
-                  ? <img src={g.cover} alt={g.name} loading="lazy" className="aspect-[16/10] w-full rounded-t-2xl object-cover" />
+                  ? <img src={g.cover} alt={g.name} loading="lazy" className="aspect-[16/10] w-full rounded-t-2xl object-contain bg-black/40" />
                   : <div className="grid aspect-[16/10] w-full place-items-center rounded-t-2xl bg-gradient-to-br from-[#7CFF1A]/15 to-[#00E5FF]/10 text-[#7CFF1A]"><Gamepad2 size={40} /></div>}
                 {/* botão flutuante sobre a capa, ligado ao link do jogo */}
                 {href ? (

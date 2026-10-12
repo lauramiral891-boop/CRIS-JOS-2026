@@ -1,3 +1,4 @@
+import PhotoAdjust from "./PhotoAdjust";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, Bot, Send, ShieldCheck, Activity, CreditCard, Megaphone, DoorOpen, BellRing, Check, X, Trash2, Lock, Copy,
@@ -64,18 +65,19 @@ function Gate({ onUnlock }: { onUnlock: () => void }) {
 }
 
 /* ---------------- pequenos componentes ---------------- */
-function PhotoPicker({ label, multiple, maxSide, quality, onPick, onError }: {
-  label: string; multiple?: boolean; maxSide?: number; quality?: number; onPick: (imgs: string[]) => void; onError: (m: string) => void;
+function PhotoPicker({ label, multiple, maxSide, quality, aspect, onPick, onError }: {
+  label: string; aspect?: number; multiple?: boolean; maxSide?: number; quality?: number; onPick: (imgs: string[]) => void; onError: (m: string) => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [adj, setAdj] = useState<string | null>(null);
   const change = async (files: FileList | null) => {
     if (!files || !files.length) return;
     setBusy(true);
     try {
       const out: string[] = [];
       for (const f of Array.from(files).slice(0, 12)) out.push(await fileToImage(f, maxSide, quality));
-      onPick(out);
+      if (aspect && !multiple && out[0]) setAdj(out[0]); else onPick(out);
     } catch (e) { onError(e instanceof Error ? e.message : "Não foi possível ler a imagem."); }
     setBusy(false);
     if (ref.current) ref.current.value = "";
@@ -86,6 +88,7 @@ function PhotoPicker({ label, multiple, maxSide, quality, onPick, onError }: {
       <button type="button" disabled={busy} onClick={() => ref.current?.click()} className={cn(btn, "flex w-full items-center justify-center gap-2 bg-[#00E5FF] text-black")}>
         <ImagePlus size={15} /> {busy ? "A preparar…" : label}
       </button>
+      {adj && aspect && <PhotoAdjust src={adj} aspect={aspect} maxSide={maxSide} quality={quality} onCancel={() => setAdj(null)} onDone={(d) => { setAdj(null); onPick([d]); }} />}
     </>
   );
 }
@@ -290,11 +293,11 @@ function GamesTab({ g, onG, onWarn }: { g: GlobalAdm; onG: OnG; onWarn: (m: stri
         <div className="space-y-2">
           {f.cover && (
             <div className="relative">
-              <img src={f.cover} alt="" className="aspect-[16/10] w-full rounded-xl object-cover" />
+              <img src={f.cover} alt="" className="aspect-[16/10] w-full rounded-xl object-contain bg-black/40" />
               <button onClick={() => setF({ ...f, cover: "" })} className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/70" aria-label="Tirar capa"><X size={14} /></button>
             </div>
           )}
-          <PhotoPicker label={f.cover ? "Trocar capa do jogo" : "Escolher capa do jogo"} maxSide={640} quality={0.72} onError={onWarn} onPick={(imgs) => setF({ ...f, cover: imgs[0] ?? "" })} />
+          <PhotoPicker label={f.cover ? "Trocar capa do jogo" : "Escolher capa do jogo"} aspect={16 / 10} maxSide={640} quality={0.72} onError={onWarn} onPick={(imgs) => setF({ ...f, cover: imgs[0] ?? "" })} />
           <Input value={f.name} onChange={(e) => { setF({ ...f, name: e.target.value }); setErr(""); }} placeholder="Nome do jogo" />
           <textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder="Descrição do jogo" rows={3} className={cn(fieldCls, "resize-none")} />
           <Input value={f.link} onChange={(e) => { setF({ ...f, link: e.target.value }); setErr(""); }} placeholder="Link do jogo (https://…)" inputMode="url" autoCapitalize="none" />
@@ -308,7 +311,7 @@ function GamesTab({ g, onG, onWarn }: { g: GlobalAdm; onG: OnG; onWarn: (m: stri
       {games.map((x, i) => (
         <div key={x.id} className={card}>
           <div className="flex gap-3">
-            {x.cover ? <img src={x.cover} alt="" className="h-20 w-28 shrink-0 rounded-xl object-cover" /> : <span className="grid h-20 w-28 shrink-0 place-items-center rounded-xl bg-[#7CFF1A]/10 text-[#7CFF1A]"><Gamepad2 size={22} /></span>}
+            {x.cover ? <img src={x.cover} alt="" className="h-20 w-28 shrink-0 rounded-xl object-contain bg-black/40" /> : <span className="grid h-20 w-28 shrink-0 place-items-center rounded-xl bg-[#7CFF1A]/10 text-[#7CFF1A]"><Gamepad2 size={22} /></span>}
             <div className="min-w-0 flex-1 space-y-1.5">
               <Input value={x.name} onChange={(e) => edit(x.id, { name: e.target.value })} placeholder="Nome" className="py-1.5" />
               <Input value={x.link} onChange={(e) => edit(x.id, { link: e.target.value })} onBlur={(e) => { const l = safeLink(e.target.value); if (l && l !== x.link) edit(x.id, { link: l }); }} placeholder="Link" className="py-1.5" />
@@ -367,7 +370,7 @@ function AdsTab({ g, onG, onWarn }: { g: GlobalAdm; onG: OnG; onWarn: (m: string
       {g.ads.map((a, i) => (
         <div key={a.id} className={card}>
           <div className="flex gap-3">
-            {a.image ? <img src={a.image} alt="" className="h-20 w-28 shrink-0 rounded-xl object-cover" /> : <span className="grid h-20 w-28 shrink-0 place-items-center rounded-xl bg-[#FFC107]/10 text-[#FFC107]"><Megaphone size={22} /></span>}
+            {a.image ? <img src={a.image} alt="" className="h-20 w-28 shrink-0 rounded-xl object-contain bg-black/40" /> : <span className="grid h-20 w-28 shrink-0 place-items-center rounded-xl bg-[#FFC107]/10 text-[#FFC107]"><Megaphone size={22} /></span>}
             <div className="min-w-0 flex-1 space-y-1.5">
               <Input value={a.title} onChange={(e) => edit(a.id, { title: e.target.value })} placeholder="Título" className="py-1.5" />
               <Input value={a.text} onChange={(e) => edit(a.id, { text: e.target.value })} placeholder="Texto" className="py-1.5" />
@@ -602,7 +605,7 @@ function BlockTab({ g, onG, onWarn }: { g: GlobalAdm; onG: OnG; onWarn: (m: stri
           </label>
           {b.image && (
             <>
-              <img src={b.image} alt="" className="max-h-40 w-full rounded-xl object-cover" />
+              <img src={b.image} alt="" className="max-h-40 w-full rounded-xl object-contain bg-black/40" />
               <button onClick={() => set({ image: "" })} className={cn(btn, "w-full bg-[#FF4D6D]/15 text-[#FF4D6D]")}>Tirar imagem</button>
             </>
           )}
