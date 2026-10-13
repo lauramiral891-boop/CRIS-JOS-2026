@@ -37,7 +37,7 @@ export function HouseAvatar({ photo, name, className }: { photo?: string; name: 
 }
 
 export function TopHeader({
-  onBell, notifCount, userName, houseName, photo,
+  onBell, notifCount, userName, houseName,
 }: {
   onBell: () => void;
   notifCount: number;
@@ -49,7 +49,6 @@ export function TopHeader({
   return (
     <div className="flex items-center justify-between gap-2 px-4 pt-3">
       <div className="flex min-w-0 flex-1 items-center gap-2.5">
-        <HouseAvatar photo={photo} name={houseName} className="h-10 w-10 rounded-xl border border-white/10 text-[13px]" />
         <div className="min-w-0 leading-tight">
           <div className="truncate font-display text-[17px] font-extrabold uppercase tracking-wide">{houseName}</div>
           <div className="truncate text-[10px] font-bold tracking-[0.18em] text-neutral-500">CJ GERENCIAMENTO</div>

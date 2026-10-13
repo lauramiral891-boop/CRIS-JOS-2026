@@ -215,7 +215,9 @@ export default function AssistantView({
     } catch {
       if (!aliveRef.current) return;
       const base = friendly(local?.text ?? fallbackAnswer(ctx));
-    const text = why && !/abort/i.test(why) ? base + "\n\n(IA online indisponível: " + why + ")" : base;
+    const net = !navigator.onLine || /failed to fetch|network|load failed/i.test(why);
+    const note = net ? "(Sem internet)" : why && !/abort/i.test(why) ? (/429|quota|limit/i.test(why) ? "(A IA online atingiu o limite de uso. Tente mais tarde.)" : "(A IA online não conseguiu responder agora. Tente de novo daqui a pouco.)") : "";
+    const text = note ? base + "\n\n" + note : base;
       await typeOut(text, (t) => patch(t));
       done(text, local?.kind === "memory" ? "memory" : "local", { help: help || !local });
       if (voiceRef.current && aliveRef.current) say(aid, text);

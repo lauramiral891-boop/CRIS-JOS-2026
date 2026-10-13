@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Home, CalendarDays, Users, Wallet, Settings as SettingsIcon, X, CheckCircle2, Sparkles,
+  Home, CalendarDays, Users, Wallet, Settings as SettingsIcon, X, CheckCircle2,
   Sparkles, Zap, Bell, Trash2, Bot, CircleHelp,
 } from "lucide-react";
 import { TopHeader } from "./components/shared";
@@ -28,6 +28,7 @@ import BookingsScreen, { type NewBooking } from "./screens/Bookings";
 import PlayersScreen, { type NewPlayer } from "./screens/Players";
 import FinanceScreen from "./screens/Finance";
 import SettingsScreen from "./screens/Settings";
+import ShiftCard from "./components/ShiftCard";
 import type {
   ActivitySeverity, AdminData, Ad, GlobalAdm, Room, AppData, AppNotification, BookingStatus, Config, Perm, Plan, SaleItem, Session, SessionRecord,
   Staff, Invoice, StationStatus, StockMove, StockReason, Tone, TxCategory,
@@ -817,6 +818,13 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   const myToday = !isOwner && me ? todaysOf(transactions, me.id, now) : [];
   const openMyCash = () =>
     setPdfSheet({ open: true, own: true, report: buildReport("day", new Date(), myToday, new Date()) });
+  const markShiftDelivered = () =>
+    setData((d) => {
+      const list = d.shifts ?? [];
+      const idx = list.findIndex((x) => x.actorId === actorRef.current.id && !!x.end && !x.delivered);
+      if (idx < 0) return d;
+      return { ...d, shifts: list.map((x, n) => (n === idx ? { ...x, delivered: true, deliveredAt: Date.now() } : x)) };
+    });
   const openPdfFromSettings = () =>
     setPdfSheet({ open: true, report: buildReport("day", new Date(), dataRef.current.transactions, new Date()) });
 
@@ -1100,7 +1108,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                   <StaffProfile staff={me} houseName={account.houseName} photo={account.photo} onLogout={logout} />
                 )}
                 {tab === "settings" && isOwner && (
-                  <SettingsScreen
+                  <><ShiftCard staff={staff} onStaffSchedule={(id, p) => upd("staff", (v) => v.map((x) => (x.id === id ? { ...x, ...p } : x)))} shifts={data.shifts ?? []} transactions={transactions} actorId={actor.id} actorName={actor.name} isOwner={isOwner} now={now} onOpenReport={openPdfFromSettings} onChange={(fn) => setData((d) => ({ ...d, shifts: fn(d.shifts ?? []) }))} /><SettingsScreen
                     config={config} stationCount={stations.length} now={now}
                     onPatch={(patch) => { patchConfig(patch); if (patch.password) onAccountPatch({ passHash: patch.password }); }}
                     photo={account.photo} accountId={account.id} isOwner={isOwner}
@@ -1122,7 +1130,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                     onOpenPdf={openPdfFromSettings}
                     onOpenAI={() => setShowAI(true)}
                     notify={notify} toast={toast}
-                  />
+                  /></>
                 )}
               </div>
 
@@ -1278,7 +1286,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
               )}
 
               {pdfSheet.open && (
-                <PdfShareSheet
+                <PdfShareSheet shifts={data.shifts ?? []} onDelivered={markShiftDelivered}
                   config={config} report={pdfSheet.report} txs={pdfSheet.own ? myToday : transactions}
                   staffName={!isOwner ? actor.name : undefined} ownCash={pdfSheet.own}
                   onPatch={patchConfig} notify={notify} toast={toast}

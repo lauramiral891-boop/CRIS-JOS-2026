@@ -5,11 +5,13 @@ import { Capacitor } from "@capacitor/core";
 import { Download, Eye, FileText, Minus, Plus, Send, Share2 } from "lucide-react";
 import Sheet from "./Sheet";
 import { ErrorBox, labelCls, fieldCls } from "./ui";
-import type { Config, PdfCaseKey, PdfFontKey, Tone, Transaction } from "../lib/types";
+import type { Config, Shift, PdfCaseKey, PdfFontKey, Tone, Transaction } from "../lib/types";
 import { buildReport, filterScope, type Report } from "../lib/reports";
-import { buildReportPdf, dayName, fmtDate, fmtTime, kindLabels, pdfFileName, reportSummaryText } from "../lib/pdf";
+import { dayName, fmtDate, fmtTime, kindLabels, pdfFileName, reportSummaryText } from "../lib/pdf";
 import { formatAOAshort } from "../lib/format";
 import { cn } from "../utils/cn";
+import { buildReportPdf2, PDF_COLORS, PDF_MODELS, pdfAccentCss } from "../lib/reportPdf";
+import { fileToLogo } from "../lib/logoFile";
 
 interface Props {
   config: Config;
@@ -23,6 +25,8 @@ interface Props {
   notify: (title: string, desc?: string, tone?: Tone) => void;
   toast: (title: string, desc?: string, tone?: Tone) => void;
   onClose: () => void;
+  shifts?: Shift[];
+  onDelivered?: () => void;
 }
 
 const fonts: { id: PdfFontKey; name: string; sub: string; css: string }[] = [
@@ -45,7 +49,7 @@ const ddis = [
 
 const sizes = [9, 10, 11, 12, 13, 14];
 
-export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: patchHouse, staffName, ownCash, notify, toast, onClose }: Props) {
+export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: patchHouse, staffName, ownCash, notify, toast, onClose, shifts, onDelivered }: Props) {
   const [err, setErr] = useState("");
   const [localNum, setLocalNum] = useState(config.waNumber);
   const [localDdi, setLocalDdi] = useState(config.waDdi);
@@ -80,7 +84,7 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
   const make = () => {
     if (!report) throw new Error("sem relatório");
     const stamp = new Date();
-    const doc = buildReportPdf({
+    const doc = buildReportPdf2({ shifts,
       report: scopedReport as Report, txs, config, now: stamp, who,
       opts: { font: config.pdfFont, size: config.pdfSize, textCase: config.pdfCase },
     });
@@ -111,9 +115,16 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
     }
   };
 
-  const preview = () => {
+  const preview = async () => {
     try {
-      const { doc } = make();
+      const { doc, name: pvName } = make();
+      if (Capacitor.isNativePlatform()) {
+        const pvData = doc.output("datauristring").split(",")[1];
+        const pvSaved = await Filesystem.writeFile({ path: pvName, data: pvData, directory: Directory.Cache, recursive: true });
+        await Share.share({ title: pvName, url: pvSaved.uri, dialogTitle: "Abrir relatório PDF" });
+        setErr("");
+        return;
+      }
       const url = URL.createObjectURL(doc.output("blob"));
       const w = window.open(url, "_blank");
       if (!w) {
@@ -172,6 +183,7 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
     setErr("");
     try {
       const r = await shareFile();
+      if (r === "shared") onDelivered?.();
       if (r === "shared") return notify("PDF pronto para enviar", "Escolha o WhatsApp e o contacto na lista.", "green");
       if (r === "cancelled") return;
       if (!validNumber) return setErr("Este aparelho não anexa o PDF automaticamente. Escreva o número do destinatário para abrir a conversa.");
@@ -240,6 +252,39 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
           <p className={cn("mt-1 text-[11px] font-semibold", validNumber ? "text-[#00FF88]" : "text-neutral-500")}>{validNumber ? `Será enviado para ${pretty}` : "Escreva o número com ou sem o indicativo."}</p>
         </div>
 
+        {!staff && <div>
+          <span className={labelCls}>Foto / logotipo do relatório</span>
+          <div className="flex items-center gap-3">
+            {config.logo ? <img src={config.logo} alt="" className="h-12 w-12 rounded-full border-2 border-[#00FF88] object-cover" /> : <span className="grid h-12 w-12 place-items-center rounded-full border border-dashed border-white/20 text-[9px] font-bold text-neutral-500">Sem foto</span>}
+            <label className="cursor-pointer rounded-xl border border-white/15 px-3 py-2 text-[12px] font-bold text-neutral-200">
+              Escolher foto
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) fileToLogo(f).then((d) => onPatch({ logo: d })).catch(() => setErr("Não foi possível ler a imagem.")); }} />
+            </label>
+            {config.logo ? <button type="button" onClick={() => onPatch({ logo: "" })} className="text-[11px] font-bold text-neutral-400 underline">Remover</button> : null}
+          </div>
+        </div>}
+
+        {!staff && <div>
+          <span className={labelCls}>Cor do relatório</span>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(PDF_COLORS).map(([k, c]) => (
+              <button key={k} type="button" aria-label={c.name} onClick={() => onPatch({ pdfColor: k })} className={cn("h-9 w-9 rounded-full border-2 active:scale-90", (config.pdfColor ?? "verde") === k ? "border-white" : "border-transparent")} style={{ background: `rgb(${c.rgb.join(",")})` }} />
+            ))}
+          </div>
+        </div>}
+
+        {!staff && <div>
+          <span className={labelCls}>Modelo do relatório</span>
+          <div className="grid grid-cols-2 gap-1.5">
+            {PDF_MODELS.map((m) => (
+              <button key={m.id} type="button" onClick={() => onPatch({ pdfModel: m.id })} className={cn("rounded-xl border px-1.5 py-2 text-center active:scale-95", (config.pdfModel ?? "detalhado") === m.id ? "border-[#00FF88] bg-[#00FF88]/10 text-[#00FF88]" : "border-white/10 text-neutral-400")}>
+                <span className="block text-[12px] font-bold">{m.name}</span>
+                <span className="block text-[9.5px] opacity-70">{m.sub}</span>
+              </button>
+            ))}
+          </div>
+        </div>}
+
         {/* Tipo de letra */}
         {!staff && <div>
           <span className={labelCls}>Tipo de letra</span>
@@ -291,7 +336,7 @@ export default function PdfShareSheet({ config, report, txs: allTxs, onPatch: pa
           <span className={labelCls}>Pré-visualização (A4)</span>
           <div className="rounded-lg bg-white px-3 py-4 shadow-inner" style={sampleStyle}>
             <div style={{ fontWeight: 700, fontSize: "1.45em" }}>{config.houseName || "Game House"}</div>
-            <div style={{ color: "#2fbf1f", fontWeight: 700 }}>{scopeKey === "sales" ? "Relatório de Outras Vendas" : "Relatório Game House"}</div>
+            <div style={{ color: pdfAccentCss(config), fontWeight: 700 }}>{scopeKey === "sales" ? "Relatório de Outras Vendas" : "Relatório Game House"}</div>
             <div style={{ marginTop: 6, borderTop: "1px solid #bbb", paddingTop: 6 }}>
               {dayName(now)} • {fmtDate(now)} • {fmtTime(now)}
             </div>

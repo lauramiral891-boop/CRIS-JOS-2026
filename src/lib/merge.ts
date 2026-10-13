@@ -118,6 +118,17 @@ function fixDeltas(base: AppData, local: AppData, remote: AppData, out: AppData)
 /** Funde os dados da casa. No telemóvel do funcionário, a configuração e a equipa vêm sempre do proprietário. */
 export function mergeData(base: AppData | null, local: AppData, remote: AppData, role: "owner" | "staff"): AppData {
   const m = merge3(base ?? undefined, local, remote) as AppData;
+  const mergeShifts = (...lists: (AppData["shifts"] | undefined)[]) => {
+    const byId = new Map<number, NonNullable<AppData["shifts"]>[number]>();
+    for (const list of lists) {
+      for (const sh of list ?? []) {
+        if (!sh) continue;
+        const prev = byId.get(sh.id);
+        byId.set(sh.id, prev ? { ...prev, ...sh, end: sh.end ?? prev.end, delivered: !!(prev.delivered || sh.delivered), deliveredAt: sh.deliveredAt ?? prev.deliveredAt } : sh);
+      }
+    }
+    return [...byId.values()].sort((a, b) => b.start - a.start);
+  };
   const mergeInvoicesByNumber = (...lists: (AppData["invoices"] | undefined)[]) => {
     const byNumber = new Map<string, NonNullable<AppData["invoices"]>[number]>();
     for (const list of lists) {
@@ -135,6 +146,7 @@ export function mergeData(base: AppData | null, local: AppData, remote: AppData,
   const out: AppData = {
     ...m,
     invoices: mergeInvoicesByNumber(base?.invoices, local.invoices, remote.invoices),
+    shifts: mergeShifts(base?.shifts, local.shifts, remote.shifts),
     lastTick: Math.max(local.lastTick, remote.lastTick),
     notifications: dedupeNotifs(m.notifications ?? []).slice(0, 300),
     activity: (m.activity ?? []).slice(0, 3000),

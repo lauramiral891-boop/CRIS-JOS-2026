@@ -177,12 +177,25 @@ export interface Config {
   ivaRate?: number; // em %, por defeito 14
   company?: string; // nome na fatura; sem valor = houseName
   tagline?: string; // subtítulo, por defeito «Gerenciamento de Máquinas»
+  pdfColor?: string; // cor do relatório (chave da paleta)
+  pdfModel?: string; // modelo do relatório
 }
 
 /** Permissões que o proprietário pode dar a cada funcionário. */
 export type Perm =
   | "sessions" | "stations" | "bookings" | "players" | "finance"
   | "reports" | "pdf" | "sales" | "inventory" | "catalog";
+
+/** Turno de trabalho de um funcionário (ou do proprietário). */
+export interface Shift {
+  id: number;
+  actorId: string;
+  actorName: string;
+  start: number;
+  end: number | null;
+  delivered?: boolean;
+  deliveredAt?: number | null;
+}
 
 export interface Staff {
   id: string;
@@ -195,6 +208,8 @@ export interface Staff {
   active: boolean;
   createdAt: number;
   lastLogin: number | null;
+  schedStart?: string; // hora de entrada prevista (HH:MM)
+  schedEnd?: string; // hora de saída prevista (HH:MM)
 }
 
 export type ActivitySeverity = "info" | "warn" | "delete";
@@ -256,6 +271,7 @@ export interface AppData {
   players: Player[];
   transactions: Transaction[];
   invoices: Invoice[];
+  shifts?: Shift[];
   notifications: AppNotification[];
   inventory: InventoryItem[];
   stockMoves: StockMove[];
