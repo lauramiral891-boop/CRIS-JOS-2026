@@ -343,6 +343,8 @@ export interface Room {
 }
 
 /* ---------- Sala de Jogos (o ADM publica jogos para todos) ---------- */
+export interface GamePart { label: string; link: string }
+
 export interface Game {
   id: number;
   name: string;
@@ -351,6 +353,17 @@ export interface Game {
   cover?: string;
   /** Link de download (só http/https). */
   link: string;
+  rating?: number;
+  platforms?: string[];
+  size?: string;
+  releaseDate?: string;
+  developer?: string;
+  genre?: string;
+  language?: string;
+  featured?: boolean;
+  shots?: string[];
+  trailer?: string;
+  parts?: GamePart[];
   active: boolean;
   createdAt: number;
 }

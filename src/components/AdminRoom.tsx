@@ -1,3 +1,4 @@
+import GamesAdmin from "./GamesAdmin";
 import PhotoAdjust from "./PhotoAdjust";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -901,7 +902,7 @@ export default function AdminRoom({ onClose }: { onClose: () => void }) {
           {tab === "alerts" && <AlertsTab g={g} onG={onG} />}
           {tab === "mgrs" && <ManagersTab g={g} onG={onG} />}
           {tab === "mem" && <MemoryTab g={g} onG={onG} />}
-          {tab === "games" && <GamesTab g={g} onG={onG} onWarn={setWarn} />}
+          {tab === "games" && <GamesAdmin g={g} onG={onG} onWarn={setWarn} Picker={PhotoPicker} />}
           {tab === "accounts" && <AccountsTab />}
           {tab === "block" && <BlockTab g={g} onG={onG} onWarn={setWarn} />}
         </>
