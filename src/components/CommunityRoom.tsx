@@ -3,7 +3,7 @@ import { ChevronLeft, Search, X } from "lucide-react";
 import { hasSession } from "../lib/cloud";
 import CommunityFeed from "./CommunityFeed";
 
-type Acc = { ownerName?: string; houseName?: string; login?: string };
+type Acc = { ownerName?: string; houseName?: string; login?: string; photo?: string };
 type Props = { onClose: () => void; account: object };
 
 export default function CommunityRoom({ onClose, account }: Props) {
@@ -45,7 +45,7 @@ export default function CommunityRoom({ onClose, account }: Props) {
         </div>
 
         {linked ? (
-          <CommunityFeed email={email} name={name} q={q} />
+          <CommunityFeed email={email} name={name} photo={a.photo ?? ""} q={q} />
         ) : (
           <div className="rounded-2xl border border-dashed border-white/20 p-6 text-center">
             <p className="text-[14px] font-bold">Ligue a sua conta à nuvem</p>

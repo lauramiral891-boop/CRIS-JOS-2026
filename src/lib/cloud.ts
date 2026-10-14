@@ -383,3 +383,38 @@ export async function cloudRest<T>(email: string, path: string, init: RestInit =
     return { ok: false, error: OFFLINE_MSG };
   }
 }
+
+/* ---------- Comunidade: ficheiros (fotos) no Storage ---------- */
+export const cloudMediaUrl = (path: string) =>
+  `${URL_}/storage/v1/object/public/community/${path}`;
+
+export async function cloudUpload(email: string, path: string, file: Blob): Promise<Res<string>> {
+  const t = await token(email.trim().toLowerCase());
+  if (!t) return { ok: false, error: "Sem sessão na nuvem." };
+  try {
+    const r = await raw(`/storage/v1/object/community/${path}`, {
+      method: "POST",
+      token: t,
+      body: file,
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+    });
+    if (!r.ok) return { ok: false, error: await errText(r, "Não foi possível enviar o ficheiro.") };
+    return { ok: true, data: cloudMediaUrl(path) };
+  } catch {
+    return { ok: false, error: OFFLINE_MSG };
+  }
+}
+
+export async function cloudRemoveFiles(email: string, paths: string[]): Promise<void> {
+  const t = await token(email.trim().toLowerCase());
+  if (!t || paths.length === 0) return;
+  try {
+    await raw("/storage/v1/object/community", {
+      method: "DELETE",
+      token: t,
+      body: JSON.stringify({ prefixes: paths }),
+    });
+  } catch {
+    /* ignora */
+  }
+}
