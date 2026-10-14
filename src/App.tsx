@@ -11,6 +11,8 @@ import SetupWizard, { type SetupResult } from "./components/SetupWizard";
 import ReportsView, { type ReportTab } from "./components/ReportsView";
 import StockRoom from "./components/StockRoom";
 import GamesRoom from "./components/GamesRoom";
+import CommunityRoom from "./components/CommunityRoom";
+import { MessageCircle as CommIcon } from "lucide-react";
 import SalesView, { type CartLine } from "./components/SalesView";
 import AssistantView from "./components/AssistantView";
 import OnboardingGuide from "./components/OnboardingGuide";
@@ -99,6 +101,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
   const [gadm, setGadm] = useState<GlobalAdm>(() => loadGlobalAdm());
   const [room, setRoom] = useState<Room | null>(null);
   const [showGames, setShowGames] = useState(false);
+  const [showCommunity, setShowCommunity] = useState(false);
   const [notifAsk, setNotifAsk] = useState(true);
 
   const [now, setNow] = useState(() => Date.now());
@@ -1165,9 +1168,9 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                       </button>
                     );
                   })}
-                  <button onClick={() => setGuideManualOpen((n) => n + 1)} aria-label="Tutorial" className="group flex flex-col items-center gap-1 py-1.5 transition active:scale-95">
-                    <span className="grid h-7 w-12 place-items-center rounded-full text-[#00E5FF]"><CircleHelp size={20} /></span>
-                    <span className="text-[10.5px] font-semibold text-neutral-500">Tutorial</span>
+                  <button onClick={() => setShowCommunity(true)} aria-label="Comunidade" className="group flex flex-col items-center gap-1 py-1.5 transition active:scale-95">
+                    <span className="grid h-7 w-12 place-items-center rounded-full text-[#00E5FF]"><CommIcon size={20} /></span>
+                    <span className="text-[10.5px] font-semibold text-neutral-500">Comunidade</span>
                   </button>
                 </div>
               </nav>
@@ -1185,6 +1188,10 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                       </div>
                     </div>
                     <p className="mb-3 text-[11px] text-neutral-500">Cada aviso apaga-se sozinho 24h depois.{!config.notifOn && " (Notificações desativadas em Definições)"}</p>
+                    <button onClick={() => { setShowNotif(false); setGuideManualOpen((n) => n + 1); }} className="mb-3 flex w-full items-center gap-3 rounded-xl border border-[#00E5FF]/30 bg-[#00E5FF]/10 p-3 text-left active:scale-[0.98]">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[#00E5FF]/15 text-[#00E5FF]"><CircleHelp size={18} /></span>
+                      <span className="text-[13px] font-bold">Guia / Tutorial da app</span>
+                    </button>
                     {notifications.length === 0 && (
                       <div className="rounded-xl border border-dashed border-white/15 p-6 text-center text-[12.5px] text-neutral-500">
                         <Bell size={22} className="mx-auto mb-2 opacity-50" />
@@ -1324,6 +1331,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
 
           {room && <RoomView room={room} onClose={() => setRoom(null)} />}
           {showGames && <GamesRoom games={gadm.games.filter((x) => x.active)} onClose={() => setShowGames(false)} />}
+          {showCommunity && <CommunityRoom onClose={() => setShowCommunity(false)} account={account} />}
       <OnboardingGuide userKey={String(account.id)} manualOpen={guideManualOpen} tab={tab} onNavigate={setTab} isOwner={isOwner} room={room} />
 
           <div className="pointer-events-none absolute inset-x-4 bottom-28 z-[80] flex flex-col gap-2">

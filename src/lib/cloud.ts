@@ -359,3 +359,27 @@ export const admConfirmPayment = (owner: string, days: number) =>
   rpc<string>("adm_confirm_payment", { p_owner: owner, p_days: days }, ADM_EMAIL);
 export const myControl = (email: string) =>
   rpc<{ blocked: boolean; status: string; paid_until: string | null }>("my_control", {}, email);
+
+/* ---------- Comunidade: pedidos REST com a sessão de cada conta ---------- */
+export const cloudUid = (email: string): string =>
+  readS(email.trim().toLowerCase())?.uid ?? "";
+
+type RestInit = { method?: string; body?: unknown; prefer?: string };
+
+export async function cloudRest<T>(email: string, path: string, init: RestInit = {}): Promise<Res<T>> {
+  const t = await token(email.trim().toLowerCase());
+  if (!t) return { ok: false, error: "Sem sessão na nuvem." };
+  try {
+    const r = await raw(path, {
+      method: init.method ?? "GET",
+      token: t,
+      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      headers: init.prefer ? { Prefer: init.prefer } : undefined,
+    });
+    if (!r.ok) return { ok: false, error: await errText(r, "Não foi possível falar com a nuvem.") };
+    const txt = await r.text();
+    return { ok: true, data: (txt ? JSON.parse(txt) : undefined) as T };
+  } catch {
+    return { ok: false, error: OFFLINE_MSG };
+  }
+}
