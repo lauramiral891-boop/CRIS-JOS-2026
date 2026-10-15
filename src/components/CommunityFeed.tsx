@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { MessageCircle } from "lucide-react";
+import ChatSheet from "./ChatSheet";
 import { ADM_EMAIL, cloudUid } from "../lib/cloud";
 import {
   canModerate, createComment, createPost, deleteComment, deletePost, ensureProfile,
@@ -25,6 +27,8 @@ export default function CommunityFeed({ email, name, photo, q }: Props) {
   const [err, setErr] = useState("");
   const [view, setView] = useState<View>(null);
   const [top, setTop] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatTo, setChatTo] = useState("");
   const me = cloudUid(email);
   const mod = canModerate();
 
@@ -145,7 +149,7 @@ export default function CommunityFeed({ email, name, photo, q }: Props) {
     <div className="space-y-2">
       {inProfile ? (
         <ProfileHeader name={profName} photo={profPhoto} bio={prof?.bio} since={prof?.created_at}
-          isMe={profileId === me} count={base.length} onBack={() => setProfileId("")} onSaveBio={saveMyBio} />
+          isMe={profileId === me} count={base.length} onBack={() => setProfileId("")} onSaveBio={saveMyBio} onMessage={() => { setChatTo(profileId); setChatOpen(true); }} />
       ) : (
         <>
           <GroupHeader members={members} />
@@ -183,6 +187,17 @@ export default function CommunityFeed({ email, name, photo, q }: Props) {
           onReact={(t, e) => void react(t, e)}
           onProfile={(id) => { setOpenId(""); setProfileId(id); }}
           onClose={() => setOpenId("")} />
+      )}
+      {!chatOpen && (
+        <button onClick={() => { setChatTo(""); setChatOpen(true); }} aria-label="Chat"
+          className="absolute bottom-5 right-4 z-30 flex h-16 w-16 flex-col items-center justify-center rounded-full bg-[#00FF88] text-black shadow-[0_8px_24px_rgba(0,255,136,0.45)] active:scale-95">
+          <MessageCircle size={22} />
+          <span className="text-[10px] font-extrabold">Chat</span>
+        </button>
+      )}
+      {chatOpen && (
+        <ChatSheet email={email} me={me} mod={mod} members={members} start={chatTo}
+          onClose={() => { setChatOpen(false); setChatTo(""); }} />
       )}
     </div>
   );

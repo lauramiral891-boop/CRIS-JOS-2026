@@ -11,6 +11,7 @@ type Props = {
   count: number;
   onBack: () => void;
   onSaveBio: (bio: string) => Promise<string>;
+  onMessage?: () => void;
 };
 
 export default function ProfileHeader(p: Props) {
@@ -49,6 +50,10 @@ export default function ProfileHeader(p: Props) {
 
         {!edit && p.bio && <p className="mt-2 text-[13.5px] text-neutral-200">{p.bio}</p>}
         {!edit && !p.bio && p.isMe && <p className="mt-2 text-[12.5px] text-neutral-500">Ainda sem bio.</p>}
+        {!edit && !p.isMe && p.onMessage && (
+          <button onClick={p.onMessage}
+            className="mt-3 rounded-xl bg-[#00FF88] px-5 py-2 text-[13px] font-extrabold text-black">Mensagem</button>
+        )}
         {!edit && p.isMe && (
           <button onClick={() => { setBio(p.bio ?? ""); setEdit(true); }}
             className="mt-3 rounded-xl bg-white/10 px-4 py-2 text-[12.5px] font-bold">

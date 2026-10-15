@@ -189,3 +189,35 @@ export async function sweepFiles(email: string): Promise<void> {
     await cloudRemoveFiles(who, old.slice(i, i + 50));
   }
 }
+
+export interface ChatRow {
+  id: string;
+  author: string;
+  to_user: string | null;
+  body: string;
+  created_at: string;
+}
+
+export const chatList = (email: string, since?: string) =>
+  cloudRest<ChatRow[]>(
+    email,
+    `/rest/v1/cj_messages?select=id,author,to_user,body,created_at&order=created_at.asc&limit=400${
+      since ? `&created_at=gt.${encodeURIComponent(since)}` : ""
+    }`,
+  );
+
+export async function chatSend(email: string, body: string, to?: string): Promise<Res<void>> {
+  const author = cloudUid(email);
+  if (!author) return { ok: false, error: "Sem sessão na nuvem." };
+  return cloudRest<void>(email, "/rest/v1/cj_messages", {
+    method: "POST",
+    prefer: "return=minimal",
+    body: { author, to_user: to ?? null, body: body.trim().slice(0, 1000) },
+  });
+}
+
+export const chatDelete = (email: string, id: string) =>
+  cloudRest<void>(email, `/rest/v1/cj_messages?id=eq.${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    prefer: "return=minimal",
+  });
