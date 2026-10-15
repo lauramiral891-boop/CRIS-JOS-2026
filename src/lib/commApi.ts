@@ -11,7 +11,7 @@ export interface PostRow {
   expires_at: string;
   cj_profiles: { name: string; photo: string | null } | null;
 }
-export interface Member { id: string; name: string; photo: string | null }
+export interface Member { id: string; name: string; photo: string | null; bio?: string | null; created_at?: string }
 
 export const canModerate = () => hasSession(ADM_EMAIL);
 
@@ -39,13 +39,13 @@ export async function ensureProfile(email: string, name: string, photo?: string)
   });
 }
 
-const SEL = "id,author,body,media,created_at,expires_at,cj_profiles(name,photo)";
+const SEL = "id,author,body,media,created_at,expires_at,cj_profiles(name)";
 
 export const listPosts = (email: string) =>
   cloudRest<PostRow[]>(email, `/rest/v1/cj_posts?select=${SEL}&order=created_at.desc&limit=50`);
 
 export const listMembers = (email: string) =>
-  cloudRest<Member[]>(email, "/rest/v1/cj_profiles?select=id,name,photo&order=created_at.desc&limit=200");
+  cloudRest<Member[]>(email, "/rest/v1/cj_profiles?select=id,name,photo,bio,created_at&order=created_at.desc&limit=150");
 
 export async function createPost(email: string, body: string, files: File[]): Promise<Res<void>> {
   const author = cloudUid(email);
@@ -110,7 +110,7 @@ export type Target = { post?: string; comment?: string };
 export const listReactions = (email: string) =>
   cloudRest<ReactionRow[]>(email, "/rest/v1/cj_reactions?select=id,post_id,comment_id,user_id,emoji&limit=3000");
 
-const CSEL = "id,post_id,parent_id,author,body,created_at,expires_at,cj_profiles(name,photo)";
+const CSEL = "id,post_id,parent_id,author,body,created_at,expires_at,cj_profiles(name)";
 
 export const listComments = (email: string) =>
   cloudRest<CommentRow[]>(email, `/rest/v1/cj_comments?select=${CSEL}&order=created_at.asc&limit=1500`);
@@ -143,5 +143,15 @@ export async function setReaction(email: string, t: Target, emoji: string, mine?
     method: "POST",
     prefer: "return=minimal",
     body: { post_id: t.post ?? null, comment_id: t.comment ?? null, user_id: uid, emoji },
+  });
+}
+
+export async function saveBio(email: string, bio: string): Promise<Res<void>> {
+  const id = cloudUid(email);
+  if (!id) return { ok: false, error: "Sem sessão na nuvem." };
+  return cloudRest<void>(email, `/rest/v1/cj_profiles?id=eq.${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    prefer: "return=minimal",
+    body: { bio: bio.trim().slice(0, 200) },
   });
 }

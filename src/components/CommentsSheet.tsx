@@ -17,6 +17,7 @@ type Props = {
   onSend: (body: string, parent?: string) => Promise<string>;
   onDelete: (c: CommentRow) => void;
   onReact: (t: Target, emoji: string) => void;
+  onProfile: (id: string) => void;
   onClose: () => void;
 };
 
@@ -30,18 +31,19 @@ type ItemProps = {
   deep?: boolean;
   onReact: Props["onReact"];
   onReply: (c: CommentRow) => void;
+  onProfile: (id: string) => void;
   onDelete: (c: CommentRow) => void;
 };
 
-function Item({ c, rs, me, mod, deep, onReact, onReply, onDelete }: ItemProps) {
+function Item({ c, rs, me, mod, deep, onReact, onReply, onDelete, onProfile }: ItemProps) {
   const mine = rs.find((r) => r.user_id === me);
   const nm = c.cj_profiles?.name ?? "Jogador";
   return (
     <div className={`flex gap-2 ${deep ? "ml-10" : ""}`}>
-      <Avatar name={nm} photo={c.cj_profiles?.photo} size={deep ? 28 : 34} />
+      <button onClick={() => onProfile(c.author)} className="shrink-0 self-start"><Avatar name={nm} photo={c.cj_profiles?.photo} size={deep ? 28 : 34} /></button>
       <div className="min-w-0 flex-1">
         <div className="inline-block max-w-full rounded-2xl bg-[#262626] px-3 py-2">
-          <p className="text-[12.5px] font-bold">{nm}</p>
+          <button onClick={() => onProfile(c.author)} className="block text-left text-[12.5px] font-bold">{nm}</button>
           <p className="whitespace-pre-wrap break-words text-[13.5px]">
             {mentionParts(c.body).map((p, i) => (
               <span key={i} className={p.m ? "text-[#00FF88]" : ""}>{p.t}</span>
@@ -91,7 +93,7 @@ export default function CommentsSheet(p: Props) {
     setEmojis(false);
   };
 
-  const itemProps = { me: p.me, mod: p.mod, onReact: p.onReact, onReply: reply, onDelete: p.onDelete };
+  const itemProps = { me: p.me, mod: p.mod, onReact: p.onReact, onReply: reply, onDelete: p.onDelete, onProfile: p.onProfile };
 
   return (
     <div className="fade absolute inset-0 z-[60] flex flex-col justify-end bg-black/60" onClick={p.onClose}>

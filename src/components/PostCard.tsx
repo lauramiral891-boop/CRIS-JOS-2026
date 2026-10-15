@@ -15,6 +15,7 @@ type Props = {
   onOpen: (photos: string[], i: number) => void;
   onReact: (emoji: string) => void;
   onComments: () => void;
+  onProfile: (id: string) => void;
 };
 const LONG = 180;
 
@@ -30,9 +31,9 @@ export default function PostCard(x: Props) {
   return (
     <article className="rounded-2xl border border-[#00FF88]/20 bg-[#0a1a14] p-3.5">
       <div className="flex items-center gap-3">
-        <Avatar name={name} photo={p.cj_profiles?.photo} />
+        <button onClick={() => x.onProfile(p.author)} className="shrink-0"><Avatar name={name} photo={p.cj_profiles?.photo} /></button>
         <div className="min-w-0 flex-1 leading-tight">
-          <p className="truncate text-[14px] font-bold">{name}</p>
+          <button onClick={() => x.onProfile(p.author)} className="block max-w-full truncate text-left text-[14px] font-bold">{name}</button>
           <p className="text-[10.5px] text-neutral-500">
             {timeAgo(Date.parse(p.created_at), Date.now())} • apaga em {left}h
           </p>
