@@ -1,4 +1,4 @@
-import { ADM_EMAIL, cloudRemoveFiles, cloudRest, cloudUid, cloudUpload, hasSession } from "./cloud";
+import { ADM_EMAIL, cloudList, cloudRemoveFiles, cloudRest, cloudUid, cloudUpload, hasSession } from "./cloud";
 import type { Res } from "./cloud";
 import { compressFile, thumbFromDataUrl } from "./imageCompress";
 
@@ -154,4 +154,38 @@ export async function saveBio(email: string, bio: string): Promise<Res<void>> {
     prefer: "return=minimal",
     body: { bio: bio.trim().slice(0, 200) },
   });
+}
+
+const SWEEP_KEY = "cjg-comm-sweep";
+const OLD_MS = 25 * 3600 * 1000;
+
+async function walk(email: string, prefix: string, depth: number, out: string[]): Promise<void> {
+  const items = await cloudList(email, prefix);
+  for (const it of items) {
+    const path = prefix ? `${prefix}/${it.name}` : it.name;
+    if (it.id === null) {
+      if (depth < 3) await walk(email, path, depth + 1, out);
+    } else if (it.created_at && Date.now() - Date.parse(it.created_at) > OLD_MS) {
+      out.push(path);
+    }
+  }
+}
+
+export async function sweepFiles(email: string): Promise<void> {
+  try {
+    const last = Number(localStorage.getItem(SWEEP_KEY) ?? 0);
+    if (Date.now() - last < 6 * 3600 * 1000) return;
+    localStorage.setItem(SWEEP_KEY, String(Date.now()));
+  } catch {
+    /* ignora */
+  }
+  const adm = canModerate();
+  const who = adm ? ADM_EMAIL : email;
+  const root = adm ? "" : cloudUid(email);
+  if (!adm && !root) return;
+  const old: string[] = [];
+  await walk(who, root, adm ? 0 : 1, old);
+  for (let i = 0; i < old.length; i += 50) {
+    await cloudRemoveFiles(who, old.slice(i, i + 50));
+  }
 }

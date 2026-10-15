@@ -36,7 +36,7 @@ export default function Composer({ name, photo, onPublish }: Props) {
     <>
       <input ref={input} type="file" accept="image/*" multiple hidden
         onChange={(e) => { pick(e.target.files); e.target.value = ""; }} />
-      <div className="flex items-center gap-3 rounded-2xl border border-[#00FF88]/30 bg-[#0a1a14] p-3">
+      <div className="flex items-center gap-3 bg-[#0e1512] px-3.5 py-3">
         <Avatar name={name} photo={photo} size={42} />
         <button onClick={() => setOpen(true)}
           className="flex-1 rounded-full bg-black/30 px-4 py-2.5 text-left text-[13.5px] text-neutral-400">

@@ -30,7 +30,7 @@ export default function ProfileHeader(p: Props) {
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#00FF88]/20 bg-[#0a1a14]">
+    <div className="mx-3 mt-3 overflow-hidden rounded-2xl border border-[#00FF88]/20 bg-[#0a1a14]">
       <div className="relative h-28 bg-gradient-to-br from-[#00FF88]/35 via-[#0a1a14] to-[#00E5FF]/25">
         <button onClick={p.onBack} aria-label="Voltar"
           className="absolute left-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-black/50">

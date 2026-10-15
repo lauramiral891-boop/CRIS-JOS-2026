@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ADM_EMAIL, cloudUid } from "../lib/cloud";
 import {
   canModerate, createComment, createPost, deleteComment, deletePost, ensureProfile,
-  listComments, listMembers, listPosts, listReactions, saveBio, setReaction,
+  listComments, listMembers, listPosts, listReactions, saveBio, setReaction, sweepFiles,
 } from "../lib/commApi";
 import type { CommentRow, Member, PostRow, ReactionRow, Target } from "../lib/commApi";
 import CommentsSheet from "./CommentsSheet";
@@ -24,6 +24,7 @@ export default function CommunityFeed({ email, name, photo, q }: Props) {
   const [profileId, setProfileId] = useState("");
   const [err, setErr] = useState("");
   const [view, setView] = useState<View>(null);
+  const [top, setTop] = useState(false);
   const me = cloudUid(email);
   const mod = canModerate();
 
@@ -72,6 +73,7 @@ export default function CommunityFeed({ email, name, photo, q }: Props) {
       if (off) return;
       void loadMembers();
       void load();
+      void sweepFiles(email);
     });
     const t1 = setInterval(() => void load(), 20000);
     const t2 = setInterval(() => void loadMembers(), 600000);
@@ -132,13 +134,15 @@ export default function CommunityFeed({ email, name, photo, q }: Props) {
   const shown = n && !inProfile
     ? base.filter((p) => p.body.toLowerCase().includes(n) || p.cj_profiles.name.toLowerCase().includes(n))
     : base;
+  const score = (id: string) => reactions.filter((r) => r.post_id === id).length + comments.filter((c) => c.post_id === id).length;
+  const ordered = top ? [...shown].sort((a, b) => score(b.id) - score(a.id)) : shown;
   const openPost = posts.find((p) => p.id === openId);
   const prof = members.find((m) => m.id === profileId);
   const profName = prof?.name ?? posts.find((p) => p.author === profileId)?.cj_profiles.name ?? "Jogador";
   const profPhoto = profileId === me && photo ? photo : prof?.photo ?? null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {inProfile ? (
         <ProfileHeader name={profName} photo={profPhoto} bio={prof?.bio} since={prof?.created_at}
           isMe={profileId === me} count={base.length} onBack={() => setProfileId("")} onSaveBio={saveMyBio} />
@@ -148,13 +152,17 @@ export default function CommunityFeed({ email, name, photo, q }: Props) {
           <Composer name={name} photo={photo} onPublish={publish} />
         </>
       )}
-      {err && <p className="rounded-xl bg-[#FF4D6D]/10 p-2.5 text-center text-[12px] text-[#FF8FA3]">{err}</p>}
+      <div className="flex items-center justify-between bg-[#0e1512] px-4 py-3">
+        <span className="text-[16px] font-extrabold">{top ? "Mais populares" : "Mais recentes"}</span>
+        <button onClick={() => setTop((v) => !v)} className="text-[13px] font-bold uppercase text-neutral-400">Ordenar</button>
+      </div>
+      {err && <p className="mx-3 rounded-xl bg-[#FF4D6D]/10 p-2.5 text-center text-[12px] text-[#FF8FA3]">{err}</p>}
       {shown.length === 0 && !err && (
         <p className="py-8 text-center text-[13px] text-neutral-500">
           {inProfile ? "Sem publicações." : "Ainda sem publicações. Seja o primeiro!"}
         </p>
       )}
-      {shown.map((p) => (
+      {ordered.map((p) => (
         <PostCard key={p.id} p={p} me={me}
           rs={reactions.filter((r) => r.post_id === p.id)}
           nComments={comments.filter((c) => c.post_id === p.id).length}

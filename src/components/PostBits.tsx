@@ -19,7 +19,7 @@ export function PostMedia({ photos, onOpen }: MediaProps) {
   const extra = photos.length - shown.length;
   const one = photos.length === 1;
   return (
-    <div className={`mt-2.5 grid gap-1 overflow-hidden rounded-xl ${one ? "grid-cols-1" : "grid-cols-2"}`}>
+    <div className={`mt-2.5 -mx-3.5 grid gap-0.5 ${one ? "grid-cols-1" : "grid-cols-2"}`}>
       {shown.map((s, i) => (
         <button key={i} onClick={() => onOpen(i)} className="relative block">
           <img src={s} alt="" loading="lazy"

@@ -1170,7 +1170,7 @@ export default function Workspace({ account, session, fresh, onExit, onAccountPa
                   })}
                   <button onClick={() => setShowCommunity(true)} aria-label="Comunidade" className="group flex flex-col items-center gap-1 py-1.5 transition active:scale-95">
                     <span className="grid h-7 w-12 place-items-center rounded-full text-[#00E5FF]"><CommIcon size={20} /></span>
-                    <span className="text-[10.5px] font-semibold text-neutral-500">Comunidade</span>
+                    <span className="text-[10.5px] font-semibold text-neutral-500">Grupo</span>
                   </button>
                 </div>
               </nav>

@@ -59,7 +59,7 @@ export function ReactButton({ mine, onPick, bar }: Props) {
   };
   const own = Array.from(custom.trim()).slice(0, 2).join("");
   const base = bar
-    ? "flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/5 py-2.5 text-[13px] font-bold"
+    ? "flex w-full items-center justify-center gap-1.5 rounded-full bg-white/10 py-3 text-[13px] font-bold"
     : "inline-flex items-center gap-1 text-[12px] font-bold";
   const tone = mine ? "text-[#00FF88]" : "text-neutral-300";
 

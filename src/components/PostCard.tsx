@@ -29,7 +29,7 @@ export default function PostCard(x: Props) {
   const text = cut ? `${p.body.slice(0, LONG).trimEnd()}…` : p.body;
   const mine = rs.find((r) => r.user_id === x.me);
   return (
-    <article className="rounded-2xl border border-[#00FF88]/20 bg-[#0a1a14] p-3.5">
+    <article className="bg-[#0e1512] px-3.5 py-3">
       <div className="flex items-center gap-3">
         <button onClick={() => x.onProfile(p.author)} className="shrink-0"><Avatar name={name} photo={p.cj_profiles?.photo} /></button>
         <div className="min-w-0 flex-1 leading-tight">
@@ -66,10 +66,10 @@ export default function PostCard(x: Props) {
           {x.nComments} {x.nComments === 1 ? "comentário" : "comentários"}
         </button>
       </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-white/10 pt-2">
+      <div className="mt-2 grid grid-cols-2 gap-2">
         <ReactButton bar mine={mine} onPick={x.onReact} />
         <button onClick={x.onComments}
-          className="flex items-center justify-center gap-1.5 rounded-xl bg-white/5 py-2.5 text-[13px] font-bold text-neutral-300">
+          className="flex items-center justify-center gap-1.5 rounded-full bg-white/10 py-3 text-[13px] font-bold text-neutral-300">
           <MessageCircle size={16} />Comentar
         </button>
       </div>

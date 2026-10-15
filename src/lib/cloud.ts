@@ -418,3 +418,21 @@ export async function cloudRemoveFiles(email: string, paths: string[]): Promise<
     /* ignora */
   }
 }
+
+export interface StorageEntry { name: string; id: string | null; created_at: string | null }
+
+export async function cloudList(email: string, prefix: string): Promise<StorageEntry[]> {
+  const t = await token(email.trim().toLowerCase());
+  if (!t) return [];
+  try {
+    const r = await raw("/storage/v1/object/list/community", {
+      method: "POST",
+      token: t,
+      body: JSON.stringify({ prefix, limit: 100, offset: 0 }),
+    });
+    if (!r.ok) return [];
+    return (await r.json()) as StorageEntry[];
+  } catch {
+    return [];
+  }
+}
