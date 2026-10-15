@@ -87,3 +87,61 @@ export async function deletePost(email: string, p: PostRow): Promise<Res<void>> 
   if (r.ok) await cloudRemoveFiles(email, pathsOf(p.media));
   return r;
 }
+
+export interface ReactionRow {
+  id: string;
+  post_id: string | null;
+  comment_id: string | null;
+  user_id: string;
+  emoji: string;
+}
+export interface CommentRow {
+  id: string;
+  post_id: string;
+  parent_id: string | null;
+  author: string;
+  body: string;
+  created_at: string;
+  expires_at: string;
+  cj_profiles: { name: string; photo: string | null } | null;
+}
+export type Target = { post?: string; comment?: string };
+
+export const listReactions = (email: string) =>
+  cloudRest<ReactionRow[]>(email, "/rest/v1/cj_reactions?select=id,post_id,comment_id,user_id,emoji&limit=3000");
+
+const CSEL = "id,post_id,parent_id,author,body,created_at,expires_at,cj_profiles(name,photo)";
+
+export const listComments = (email: string) =>
+  cloudRest<CommentRow[]>(email, `/rest/v1/cj_comments?select=${CSEL}&order=created_at.asc&limit=1500`);
+
+export async function createComment(email: string, postId: string, body: string, parent?: string): Promise<Res<void>> {
+  const author = cloudUid(email);
+  if (!author) return { ok: false, error: "Sem sessão na nuvem." };
+  return cloudRest<void>(email, "/rest/v1/cj_comments", {
+    method: "POST",
+    prefer: "return=minimal",
+    body: { post_id: postId, parent_id: parent ?? null, author, body: body.trim().slice(0, 1000) },
+  });
+}
+
+export const deleteComment = (email: string, id: string) =>
+  cloudRest<void>(email, `/rest/v1/cj_comments?id=eq.${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    prefer: "return=minimal",
+  });
+
+export async function setReaction(email: string, t: Target, emoji: string, mine?: ReactionRow): Promise<Res<void>> {
+  const uid = cloudUid(email);
+  if (!uid) return { ok: false, error: "Sem sessão na nuvem." };
+  if (mine) {
+    const url = `/rest/v1/cj_reactions?id=eq.${encodeURIComponent(mine.id)}`;
+    if (mine.emoji === emoji) return cloudRest<void>(email, url, { method: "DELETE", prefer: "return=minimal" });
+    return cloudRest<void>(email, url, { method: "PATCH", prefer: "return=minimal", body: { emoji } });
+  }
+  return cloudRest<void>(email, "/rest/v1/cj_reactions", {
+    method: "POST",
+    prefer: "return=minimal",
+    body: { post_id: t.post ?? null, comment_id: t.comment ?? null, user_id: uid, emoji },
+  });
+}
